@@ -102,21 +102,27 @@ export default function AppointmentPage() {
                                                 onChange={(e) => setSearch(e.target.value)}
                                             />
                                         </div>
-                                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                        <Select value={statusFilter} onValueChange={(value)=> {
+                                            setStatusFilter(value === 'allstatus' ? '': value)
+                                        }}>
                                             <SelectTrigger className="w-[120px] border border-gray-300">
                                                 <SelectValue placeholder="Status" />
                                             </SelectTrigger>
                                             <SelectContent>
+                                                 <SelectItem value="allstatus">All</SelectItem>
                                                 <SelectItem value="confirmed">Confirmed</SelectItem>
                                                 <SelectItem value="pending">Pending</SelectItem>
                                                 <SelectItem value="cancelled">Cancelled</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                        <Select value={typeFilter} onValueChange={setTypeFilter}>
+                                        <Select value={typeFilter} onValueChange={(value) =>{
+                                            setTypeFilter(value === 'alltypes' ? '': value)
+                                        }}>
                                             <SelectTrigger className="w-[140px] border border-gray-300">
                                                 <SelectValue placeholder="Type" />
                                             </SelectTrigger>
                                             <SelectContent>
+                                                 <SelectItem value="alltypes">All</SelectItem>
                                                 <SelectItem value="monthly">Monthly Checkup</SelectItem>
                                                 <SelectItem value="follow">Follow-up Checkup</SelectItem>
                                                 <SelectItem value="consultation">Consultation</SelectItem>
@@ -179,7 +185,7 @@ export default function AppointmentPage() {
                                                                 navigate(`/appointments/notes?name=${encodeURIComponent(appt.patient)}`);
                                                             }
                                                         }}>
-                                                            <SelectTrigger className="p-1 h-auto border-none bg-transparent shadow-none focus:outline-none">
+                                                            <SelectTrigger className="p-1 h-auto border-none bg-transparent shadow-none focus:outline-none [&>svg]:hidden">
                                                                 <MoreHorizIcon className="text-gray-500 cursor-pointer" fontSize="small" />
                                                             </SelectTrigger>
                                                             <SelectContent className="w-[180px] border-none">

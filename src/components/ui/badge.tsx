@@ -24,8 +24,13 @@ const badgeVariants = cva(
         cancelled: "bg-red-100 text-red-800 border border-red-300",
        
        //Statuses for Patient Directory
-        inactive: "bg-[#616161] text-[#616161] border-[#E5E5E5]",
-        active: "bg-[#E6FCDC] text[#166534] border-[#BCFFAC]"  
+        Inactive: "bg-[#F3F3F3] text-[#616161] border-[#E5E5E5]",
+        Active: "bg-[#E6FCDC] text-[#166534] border-[#BCFFAC]" ,
+
+        // Risk level badge
+        High: "bg-[#FFE3E3] text-[#C03636] border-[#FFCBCB]",
+        Medium: "bg-[#FCFBDC] text-[#E2BC4A] border-[#F0EEAE]",
+        Low: "bg-[#E6FCDC] text-[#166534] border-[#BCFFAC]"
       },
     },
     defaultVariants: {

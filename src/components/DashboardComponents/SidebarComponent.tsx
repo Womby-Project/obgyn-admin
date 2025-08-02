@@ -73,7 +73,7 @@ function SidebarLink({ icon, text, to }: SidebarLinkProps) {
             to={to}
             className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium ${
-                    isActive ? 'bg-[#E9AEA4] text-white w-[190px]' : 'text-gray-700 hover:bg-gray-100'
+                    isActive ? 'bg-[#E5E7EB] text-[#4B5563] w-[190px]' : 'text-gray-700 hover:bg-gray-100'
                 }`
             }
         >
