@@ -23,6 +23,7 @@ const insights = [
   { id: 9, type: "symptom", name: "Nina Garcia", description: "Mild cramping noted", timestamp: new Date(Date.now() - 86400000 * 7) },
   { id: 10, type: "mood", name: "Rhea Lim", description: "More energy for tasks", timestamp: new Date(Date.now() - 1000 * 60 * 1) }, // 1 min ago
 ];
+
 const getColor = (type: string) => {
   if (type === "symptom") {
     return { background: "#FEF2F2", border: "rgba(252, 165, 165, 0.5)" }; // light red bg, red stroke
@@ -30,14 +31,15 @@ const getColor = (type: string) => {
     return { background: "#FFF0DD", border: "rgba(253, 186, 116, 0.4)" }; // light orange bg, orange stroke
   }
 };
+
 const getIcon = (type: string) => {
-  if (type === "symptom") return <SymptomsIcon />;
-  if (type === "mood") return <MoodIcon />;
-  return null; 
-}
+  if (type === "symptom") return <SymptomsIcon className="w-7 h-7" />;
+  if (type === "mood") return <MoodIcon className="w-7 h-7" />;
+  return null;
+};
+
 const getTitle = (type: string, name: string) =>
   `${type === "symptom" ? "Symptom Alert" : "Mood Alert"} – ${name}`;
-
 
 function timeAgo(date: Date): string {
   const diff = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -52,11 +54,11 @@ export default function MaternlInsightPanel() {
   return (
     <div className="bg-white rounded-xl shadow-sm p-3 h-[530px]">
       {/* Header  */}
-      <div className="flex flex-col items-start border-b-1 border-gray-100 pb-2 w-full  left-0 ">
-        <h2 className="text-[20px] font-lato font-semibold ">
+      <div className="flex flex-col items-start border-b-1 border-gray-100 pb-2 w-full left-0">
+        <h2 className="text-[20px] font-lato font-semibold">
           Maternal Insights
         </h2>
-        <h3 className="text-[15px] font-lato font-semibold text-gray-400 ">
+        <h3 className="text-[15px] font-lato font-semibold text-gray-400">
           Alert this week
         </h3>
       </div>
@@ -75,7 +77,6 @@ export default function MaternlInsightPanel() {
                 borderColor: border,
                 borderWidth: "1px",
                 borderStyle: "solid",
-                
               }}
             >
               <CardHeader className="flex items-start gap-3">
@@ -84,7 +85,7 @@ export default function MaternlInsightPanel() {
 
                 {/* Text */}
                 <div className="flex-1">
-                  <CardTitle className="text-[16px] font-semibold">
+                  <CardTitle className="text-[16px] font-semibold text-black">
                     {getTitle(item.type, item.name)}
                   </CardTitle>
                   <CardDescription className="mt-1 text-sm">
@@ -105,5 +106,5 @@ export default function MaternlInsightPanel() {
         })}
       </div>
     </div>
-  )
+  );
 }

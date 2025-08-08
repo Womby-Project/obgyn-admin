@@ -88,3 +88,9 @@
   scrollbar-width: none;
   /* Firefox */
 }
+
+html, body {
+  overflow-y: scroll; /* Keeps scrolling */
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;     /* Firefox */
+}

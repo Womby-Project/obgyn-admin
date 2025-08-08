@@ -1,9 +1,11 @@
-// src/components/icons/InsightIcons.tsx
+interface IconProps {
+  className?: string;
+}
 
-
-export function MoodIcon() {
+export function MoodIcon({ className }: IconProps) {
   return (
     <svg
+      className={className}
       width="35"
       height="35"
       viewBox="0 0 35 35"
@@ -19,9 +21,10 @@ export function MoodIcon() {
   );
 }
 
-export function SymptomsIcon() {
+export function SymptomsIcon({ className }: IconProps) {
   return (
     <svg
+      className={className}
       width="35"
       height="35"
       viewBox="0 0 35 35"

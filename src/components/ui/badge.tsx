@@ -22,15 +22,35 @@ const badgeVariants = cva(
         pending: "bg-yellow-100 text-yellow-800 border border-yellow-300",
         confirmed: "bg-green-100 text-green-800 border border-green-300",
         cancelled: "bg-red-100 text-red-800 border border-red-300",
-       
-       //Statuses for Patient Directory
+        done: "bg-[#F3F3F3] text-[#616161] border border-[#E5E5E5]",
+        reschedule:"bg-[#FCEEDC] text-[#ED9237] border border-[#FFD49D]",
+
+        //Statuses for Patient Directory
         Inactive: "bg-[#F3F3F3] text-[#616161] border-[#E5E5E5]",
-        Active: "bg-[#E6FCDC] text-[#166534] border-[#BCFFAC]" ,
+        Active: "bg-[#E6FCDC] text-[#166534] border-[#BCFFAC]",
 
         // Risk level badge
         High: "bg-[#FFE3E3] text-[#C03636] border-[#FFCBCB]",
         Medium: "bg-[#FCFBDC] text-[#E2BC4A] border-[#F0EEAE]",
-        Low: "bg-[#E6FCDC] text-[#166534] border-[#BCFFAC]"
+        Low: "bg-[#E6FCDC] text-[#166534] border-[#BCFFAC]",
+
+        // Allergy
+        allergy: "bg-[#FFFFFF] text-[#616161] border-[#E5E5E5]",
+
+        // Pre-existing Condition badges
+        conditions: "bg-[#FFFFFF] text-[#616161] border-[#E5E5E5]",
+
+        // Moods
+        moodAnxious: "bg-[#FEF9C3] text-[#854D0E] border-[#E5E7EB]",
+        moodHappy: "bg-[#E6FCDC] text-[#166534] border-[#BCFFAC]",
+        moodSad: "bg-[#F3F3F3] text-[#616161] border-[#E5E5E5]",
+        moodCalm: "bg-[#E0F7FA] text-[#00796B] border-[#B2EBF2]",
+        moodNeutral: "bg-[#F5F5F5] text-[#424242] border-[#E0E0E0]",
+        moodTired: "bg-[#FFF8E1] text-[#F57C00] border-[#FFE0B2]",
+        moodContent: "bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]",
+        moodIrritable: "bg-[#FFF3E0] text-[#E65100] border-[#FFCC80]",
+
+    
       },
     },
     defaultVariants: {
@@ -38,6 +58,7 @@ const badgeVariants = cva(
     },
   }
 )
+
 
 function Badge({
   className,

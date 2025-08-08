@@ -13,17 +13,18 @@ export default function Sidebar() {
     return (
         <aside className="fixed left-0 w-[260px] bg-white border-r h-screen shadow-md flex flex-col border-gray-200 overflow-hidden">
             {/* Logo and App Name */}
-            <div className="h-15 flex items-center px-4 border-b border-gray-200 space-x-3 pb-4 pl-6">
+            <div className="flex items-center h-[64px] px-6 border-b border-gray-200">
                 <img
                     src="/src/assets/wombly-logo.png"
                     alt="womblylogo"
                     className="w-[40px] h-[40px] bg-[#FCF5EE] rounded-lg"
                 />
-                <div>
-                    <h1 className="text-[17px] font-semibold text-gray-900 pr-15">Wombly</h1>
-                    <p className="text-[13px] text-gray-500 pr-6">OBGYN-Dashboard</p>
+                <div className="ml-3 leading-tight">
+                    <h1 className="text-[17px] font-semibold text-gray-900">Wombly</h1>
+                    <p className="text-[13px] text-gray-500">OBGYN-Dashboard</p>
                 </div>
             </div>
+
 
             {/* Navigation */}
             <div className="flex flex-col justify-between flex-1">
@@ -41,10 +42,10 @@ export default function Sidebar() {
                     <p className="ml-8 mt-6 text-[14px] font-semibold text-left text-gray-400 uppercase mb-2">
                         MANAGEMENT
                     </p>
-                    <nav className="px-8 space-y-5">
+                    <nav className="px-8 space-y-2">
                         <SidebarLink icon={<CalendarMonthIcon fontSize="medium" />} text="Appointments" to="/appointments" />
                         <SidebarLink icon={<PeopleIcon fontSize="medium" />} text="Patients" to="/patientdirectory" />
-                        <SidebarLink icon={<PersonSearchOutlinedIcon fontSize="medium" />} text="Secretary" to="/secretary" />
+                        <SidebarLink icon={<PersonSearchOutlinedIcon fontSize="medium" />} text="Secretary" to="/secretarymanagement" />
                     </nav>
                 </div>
 
@@ -72,8 +73,7 @@ function SidebarLink({ icon, text, to }: SidebarLinkProps) {
         <NavLink
             to={to}
             className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium ${
-                    isActive ? 'bg-[#E5E7EB] text-[#4B5563] w-[190px]' : 'text-gray-700 hover:bg-gray-100'
+                `flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-[#E5E7EB] text-[#4B5563] w-[190px]' : 'text-gray-700 hover:bg-gray-100'
                 }`
             }
         >

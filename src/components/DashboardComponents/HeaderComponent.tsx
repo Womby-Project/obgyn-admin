@@ -19,7 +19,7 @@ function Header({
   const initial = name.charAt(0).toUpperCase();
 
   return (
-    <header className="flex justify-end items-center gap-4 px-6 py-4 bg-white shadow-sm h-15 relative mb-2">
+    <header className="flex justify-end items-center gap-1 px-6 py-4 bg-white shadow-sm h-16 relative mb-2">
       {/* Notification Bell */}
       <Popover>
         <PopoverTrigger asChild>

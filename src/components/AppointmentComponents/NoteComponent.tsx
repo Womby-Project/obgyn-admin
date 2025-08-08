@@ -25,7 +25,7 @@ export default function NoteComponent() {
         </header>
 
         {/* Main Content */}
-        <main className="fixed top-10 left-[260px] right-0 bottom-0 overflow-hidden">
+        <main className="fixed top-10 left-[260px] right-0 bottom-0 overflow-hidden mt-2">
           <div className="h-full w-full overflow-y-auto scrollbar-hide p-6">
             <div className="flex flex-col gap-9 mt-2 items-start w-full">
               <div className="flex flex-col p-1 mt-2 w-full">
@@ -38,7 +38,9 @@ export default function NoteComponent() {
                     <BreadcrumbList>
                       <BreadcrumbItem>
                         <BreadcrumbLink asChild>
-                          <Link to="/appointments">Appointments</Link>
+                          <Link
+                            className='hover:underline cursor-pointer'
+                            to="/appointments">Appointments</Link>
                         </BreadcrumbLink>
                       </BreadcrumbItem>
                       <BreadcrumbSeparator />
