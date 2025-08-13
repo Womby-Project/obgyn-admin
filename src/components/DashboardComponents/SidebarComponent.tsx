@@ -14,11 +14,11 @@ export default function Sidebar() {
         <aside className="fixed left-0 w-[260px] bg-white border-r h-screen shadow-md flex flex-col border-gray-200 overflow-hidden">
             {/* Logo and App Name */}
             <div className="flex items-center h-[64px] px-6 border-b border-gray-200">
-                <img
+               <img
                     src="/src/assets/wombly-logo.png"
                     alt="womblylogo"
                     className="w-[40px] h-[40px] bg-[#FCF5EE] rounded-lg"
-                />
+                /> 
                 <div className="ml-3 leading-tight">
                     <h1 className="text-[17px] font-semibold text-gray-900">Wombly</h1>
                     <p className="text-[13px] text-gray-500">OBGYN-Dashboard</p>

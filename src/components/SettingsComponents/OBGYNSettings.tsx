@@ -1,9 +1,10 @@
 import CustomTabs from "@/components/ui/CustomTabs"
 import Profilepage from "@/components/SettingsComponents/OBGYNProfile"
 import SecurityPage from "@/components/SettingsComponents/OBGYNSecurityPage"
+import AvailabilityPage from "@/components/SettingsComponents/OBGYNAvailability"
+
+
 export default function SettingsOBGYN() {
-
-
     const tabs = [
         {
             label: "Profile",
@@ -13,10 +14,16 @@ export default function SettingsOBGYN() {
             ),
         },
         {
-            label: "Security", value: "security", content:
-                <SecurityPage />
+            label:
+                "Security",
+            value: "security",
+            content: <SecurityPage />
         },
-        { label: "Availability", value: "availability", content: <p>Availability content goes here.</p> },
+        {
+            label: "Availability",
+            value: "availability",
+            content: <AvailabilityPage />
+        },
     ]
 
     return (
