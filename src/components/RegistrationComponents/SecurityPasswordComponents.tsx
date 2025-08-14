@@ -5,7 +5,6 @@ import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import type { StepContextType } from "@/lib/type";
 
-// Using the same StepContext type as BasicInformation
 export default function SetPassword() {
   const navigate = useNavigate();
   const { step, totalSteps, formData, setFormData } = useOutletContext<
@@ -16,15 +15,12 @@ export default function SetPassword() {
   >();
 
   const [password, setPassword] = useState(formData.password || "");
-  const [confirmPassword, setConfirmPassword] = useState(formData.confirmPassword || "");
+  const [confirmPassword, setConfirmPassword] = useState(
+    formData.confirmPassword || ""
+  );
 
-  useEffect(() => {
-    setFormData((prev: any) => ({
-      ...prev,
-      password,
-      confirmPassword
-    }));
-  }, [password, confirmPassword, setFormData]);
+  const cleanPassword = password.trim();
+  const cleanConfirm = confirmPassword.trim();
 
   const requirements = [
     { label: "A total of at least 8 characters", test: (pw: string) => pw.length >= 8 },
@@ -33,20 +29,39 @@ export default function SetPassword() {
     { label: "A combination of lower and upper case letters", test: (pw: string) => /[a-z]/.test(pw) && /[A-Z]/.test(pw) },
   ];
 
-  const allMet = requirements.every(req => req.test(password));
-  const passwordsMatch = password && password === confirmPassword;
+  const allMet = requirements.every(req => req.test(cleanPassword));
+  const passwordsMatch = cleanPassword && cleanPassword === cleanConfirm;
+
+  const handleContinue = () => {
+    const updatedFormData = {
+      ...formData,
+      accountInfo: {
+        ...formData.accountInfo,   // preserve any previous data
+        password,                  // snake_case, matches DB
+        confirm_password: confirmPassword, // keep for navigation steps
+      },
+    };
+
+    console.log("🔍 Step 2 - Saving formData:", updatedFormData);
+
+    setFormData(updatedFormData);
+    navigate("/professionalinformation"); // Step 3
+  };
+
 
   return (
     <div className="flex flex-col">
       <p className="text-[12px] text-[#616161] uppercase">
         Step {step} out of {totalSteps}
       </p>
-      <h1 className="text-[40px] font-bold text-[#E46B64] font-lato">Account Security</h1>
+      <h1 className="text-[40px] font-bold text-[#E46B64] font-lato">
+        Account Security
+      </h1>
       <p className="text-[17px] text-[#616161]">
         Secure your account by setting a reliable and private password.
       </p>
 
-      {/* Password Input */}
+      {/* Password */}
       <div className="flex flex-col mt-5">
         <input
           type="password"
@@ -57,7 +72,7 @@ export default function SetPassword() {
         />
       </div>
 
-      {/* Confirm Password Input */}
+      {/* Confirm Password */}
       <div className="flex flex-col mt-5">
         <input
           type="password"
@@ -68,7 +83,7 @@ export default function SetPassword() {
         />
       </div>
 
-      {/* Password Requirements */}
+      {/* Requirements */}
       <div className="mt-3 w-[362px] text-[13px] text-[#616161]">
         <p className="mb-2">Your password must contain:</p>
         {requirements.map((req, idx) => {
@@ -104,12 +119,11 @@ export default function SetPassword() {
       {/* Continue Button */}
       <button
         disabled={!allMet || !passwordsMatch}
-        onClick={() => navigate("/professionalinformaion")}
-        className={`w-[362px] h-[45px] rounded-md mt-5 text-white transition-all duration-200 ${
-          allMet && passwordsMatch
-            ? "bg-[#E46B64] hover:shadow-md"
-            : "bg-gray-300 cursor-not-allowed"
-        }`}
+        onClick={handleContinue}
+        className={`w-[362px] h-[45px] rounded-md mt-5 text-white transition-all duration-200 ${allMet && passwordsMatch
+          ? "bg-[#E46B64] hover:shadow-md"
+          : "bg-gray-300 cursor-not-allowed"
+          }`}
       >
         Continue
       </button>

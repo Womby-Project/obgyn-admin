@@ -36,6 +36,8 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.13",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.525.0",
     "react": "^19.1.0",

@@ -28,7 +28,7 @@ export default function App() {
       <Route element={<MultiStepLayout />}>
         <Route path="/basicinformation" element={<BasicInformation />} />
         <Route path="/setpassword" element={<SetPassword />} />
-        <Route path="/professionalinformaion" element={<ProfessionalInformation />} />
+        <Route path="/professionalinformation" element={<ProfessionalInformation />} />
         <Route path="/setschedule" element={<SetSchedulePage />} />
         <Route path="/finalpage" element={<CreationPage />} />
       </Route>
