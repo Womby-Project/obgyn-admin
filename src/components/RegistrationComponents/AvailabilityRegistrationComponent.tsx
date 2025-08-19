@@ -7,13 +7,13 @@ import { supabase } from "@/lib/supabaseClient";
 type StepContext = { step: number; totalSteps: number; formData: any };
 
 const daysOfWeek = [
-    { id: "sun", label: "S" },
-    { id: "mon", label: "M" },
-    { id: "tue", label: "T" },
-    { id: "wed", label: "W" },
-    { id: "thu", label: "Th" },
-    { id: "fri", label: "F" },
-    { id: "sat", label: "S" }
+    { id: "Sunday", label: "S" },
+    { id: "Monday", label: "M" },
+    { id: "Tuesday", label: "T" },
+    { id: "Wednesday", label: "W" },
+    { id: "Thursday", label: "Th" },
+    { id: "Friday", label: "F" },
+    { id: "Saturday", label: "S" }
 ];
 
 export default function SetSchedul() {

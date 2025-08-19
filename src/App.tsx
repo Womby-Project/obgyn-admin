@@ -17,14 +17,16 @@ import ProfessionalInformation from '@/components/RegistrationComponents/Profess
 import MultiStepLayout from './components/RegistrationComponents/RegisterLayout';
 import SetSchedulePage from '@/components/RegistrationComponents/AvailabilityRegistrationComponent'
 import CreationPage from '@/components/RegistrationComponents/FinishRegisterComponent'
+import ProtectedLayout from "@/components/ProtectedRoutesLayout";
+import DashboardLayout from './components/DashboardLayout';
 
 export default function App() {
   return (
     <Routes>
-
-      {/* Login Registration Path */}
+      {/* Public */}
       <Route path="/" element={<LoginPage />} />
-      {/* Registration steps share one layout */}
+
+      {/* Registration */}
       <Route element={<MultiStepLayout />}>
         <Route path="/basicinformation" element={<BasicInformation />} />
         <Route path="/setpassword" element={<SetPassword />} />
@@ -33,28 +35,20 @@ export default function App() {
         <Route path="/finalpage" element={<CreationPage />} />
       </Route>
 
-
-
-
-      <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/inbox" element={<Inbox />} />
-
-      {/* Appointment Directory Main */}
-      <Route path="/appointments" element={<AppointmentPage />} />
-      {/* Appointment Directory Sub Routeas */}
-      <Route path="/appointments/notes" element={<NotesPage />} />
-
-      {/* Patient Directory Main */}
-      <Route path="/patientdirectory" element={<PatientDirectoryPage />} />
-      {/* Patient Directory Sub routes */}
-      <Route path="/patientdirectory/profile" element={<PatientProfilePage />} />
-      <Route path="/patientdirectory/maternalinsight" element={<PatientMaternalInsight />} />
-
-      {/* Secretary Main */}
-      <Route path="/secretarymanagement" element={<SecretaryManagement />} />
-
-      {/* OBGYN Settings Route */}
-      <Route path="/Settings" element={<OBGYNSetting />} />
+      {/* Protected - ONE wrapper for all private routes */}
+      <Route element={<ProtectedLayout />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/inbox" element={<Inbox />} />
+          <Route path="/appointments" element={<AppointmentPage />} />
+          <Route path="/appointments/notes" element={<NotesPage />} />
+          <Route path="/patientdirectory" element={<PatientDirectoryPage />} />
+          <Route path="/patientdirectory/profile" element={<PatientProfilePage />} />
+          <Route path="/patientdirectory/maternalinsight" element={<PatientMaternalInsight />} />
+          <Route path="/secretarymanagement" element={<SecretaryManagement />} />
+          <Route path="/settings" element={<OBGYNSetting />} />
+        </Route>
+      </Route>
 
     </Routes>
   );

@@ -12,6 +12,7 @@ export default function SettingsOBGYN() {
             content: (
                 <Profilepage />
             ),
+            
         },
         {
             label:

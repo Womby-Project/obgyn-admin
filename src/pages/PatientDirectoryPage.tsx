@@ -1,5 +1,4 @@
-import Sidebar from "@/components/DashboardComponents/SidebarComponent";
-import Header from "@/components/DashboardComponents/HeaderComponent";
+
 import { Input } from '@/components/ui/input';
 
 import {
@@ -13,9 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronDown, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import SearchIcon from '@mui/icons-material/Search';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
-import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
-import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
-import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
+
 import {
     Table,
     TableBody,
@@ -34,8 +31,7 @@ import {
     PaginationContent,
     PaginationItem,
     PaginationLink,
-    PaginationPrevious,
-    PaginationNext,
+  
 } from '@/components/ui/pagination';
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -46,12 +42,10 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogHeader,
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
-import CloseIcon from '@mui/icons-material/Close'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 
 
 
@@ -96,20 +90,11 @@ export default function PatientDirectoryPage() {
 
     return (
         <div className="flex min-h-screen  ">
-            {/* Sidebar */}
-            <div className="hidden md:block">
-                <Sidebar />
-            </div>
-
             {/* Main Content */}
-            <div className="flex flex-col flex-1 md:ml-[250px] ml-0 transition-all duration-300 shadow-sm  bg-gray-50 pb-5">
-                {/* Header */}
-                <header className="fixed top-0 md:left-[260px] left-0 right-0 h-10 bg-white shadow-sm z-10">
-                    <Header />
-                </header>
-
+            <div className="flex flex-col flex-1 ml-0 transition-all duration-300 shadow-sm  bg-gray-50 pb-5">
+    
                 {/* Main Wrapper */}
-                <main className="mt-20 px-4 md:px-6 w-[1285px]">
+                <main className="mt-7 px-4 md:px-6 w-[1285px]">
                     <div className="bg-white rounded-[5px] shadow-md w-full p-6">
                         {/* Title Section */}
                         <div className="flex flex-col gap-1 w-full">

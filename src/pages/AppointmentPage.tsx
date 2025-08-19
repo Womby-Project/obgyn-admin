@@ -89,16 +89,11 @@ export default function AppointmentPage() {
 
   return (
     <div className="flex min-h-screen bg-white">
-      <div className="hidden md:block">
-        <Sidebar />
-      </div>
+   
 
-      <div className="flex flex-col flex-1 md:ml-[250px] ml-0 transition-all duration-300 bg-gray-50 shadow-md pb-5">
-        <header className="fixed top-0 md:left-[260px] left-0 right-0 h-10 bg-white shadow-sm z-10">
-          <Header />
-        </header>
-
-        <main className="mt-20 px-4 md:px-6 w-full">
+      <div className="flex flex-col flex-1  transition-all duration-300 bg-gray-50 shadow-md pb-5 ">
+     
+      <main className="mt-7 px-4 md:px-6   ">
           <div className="bg-white rounded-md shadow-md mx-auto p-6">
             <div className="flex flex-col gap-9 items-start w-full">
               <div className="flex flex-col p-1 w-full">

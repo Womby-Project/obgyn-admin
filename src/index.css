@@ -77,6 +77,56 @@
 }
 
 
+/* Base look (matches your design tokens) */
+.toaster [data-sonner-toast] {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border-color: var(--border);
+}
+
+/* Success - soft green */
+.toaster [data-sonner-toast][data-type="success"] {
+  background: hsl(140 65% 95%) !important;
+  /* light green */
+  color: hsl(140 60% 20%) !important;
+  /* deep green text */
+  border-color: hsl(140 55% 70%) !important;
+  /* subtle green border */
+}
+
+/* Error - soft red */
+.toaster [data-sonner-toast][data-type="error"] {
+  background: hsl(0 85% 96%) !important;
+  /* light red/pink */
+  color: hsl(0 60% 25%) !important;
+  /* muted red text */
+  border-color: hsl(0 70% 75%) !important;
+  /* subtle red border */
+}
+
+/* Warning - soft amber */
+.toaster [data-sonner-toast][data-type="warning"] {
+  background: hsl(45 100% 95%) !important;
+  /* light amber */
+  color: hsl(30 75% 20%) !important;
+  /* deep amber/brown text */
+  border-color: hsl(40 85% 75%) !important;
+  /* subtle amber border */
+}
+
+/* Info - soft blue */
+.toaster [data-sonner-toast][data-type="info"] {
+  background: hsl(210 100% 95%) !important;
+  /* light blue */
+  color: hsl(210 60% 20%) !important;
+  /* deep blue text */
+  border-color: hsl(210 75% 70%) !important;
+  /* subtle blue border */
+}
+
+
+
+
 /* Fully hide scrollbars */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
@@ -89,8 +139,12 @@
   /* Firefox */
 }
 
-html, body {
-  overflow-y: scroll; /* Keeps scrolling */
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;     /* Firefox */
+html,
+body {
+  overflow-y: scroll;
+  /* Keeps scrolling */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }

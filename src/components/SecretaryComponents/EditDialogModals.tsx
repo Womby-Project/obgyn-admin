@@ -1,102 +1,195 @@
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeftIcon, XIcon } from "lucide-react";
+import { ArrowLeftIcon } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { XCircle } from "lucide-react";
 
 interface EditDialogModalsProps {
   type: "name" | "email" | "password" | null;
   onClose: () => void;
   open: boolean;
+  secretaryId?: string;
 }
 
-export default function EditDialogModals({ type, onClose, open }: EditDialogModalsProps) {
+export default function EditDialogModals({ type, onClose, open, secretaryId }: EditDialogModalsProps) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open && secretaryId && (type === "name" || type === "email")) {
+      const fetchSecretary = async () => {
+        try {
+          const { data, error } = await supabase
+            .from("secretary_users")
+            .select("*")
+            .eq("id", secretaryId)
+            .single();
+          if (error) throw error;
+          if (data) {
+            setFirstName(data.first_name);
+            setLastName(data.last_name);
+            setEmail(data.email);
+          }
+        } catch (err: any) {
+          console.error("Error fetching secretary:", err);
+          setError("Failed to fetch secretary data.");
+        }
+      };
+      fetchSecretary();
+    }
+  }, [open, secretaryId, type]);
+
+  const handleSave = async () => {
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      if (type === "name" && secretaryId) {
+        const { error } = await supabase
+          .from("secretary_users")
+          .update({ first_name: firstName, last_name: lastName })
+          .eq("id", secretaryId);
+        if (error) throw error;
+        console.log("Name updated successfully");
+        setSuccess("Name updated successfully.");
+      }
+
+      if (type === "email" && secretaryId) {
+        if (!email) throw new Error("Email cannot be empty.");
+        const { error } = await supabase
+          .from("secretary_users")
+          .update({ email })
+          .eq("id", secretaryId);
+        if (error) throw error;
+        console.log("Email updated successfully");
+        setSuccess("Email updated successfully.");
+      }
+
+      if (type === "password" && secretaryId) {
+        if (!password || !confirmPassword) throw new Error("Password fields cannot be empty.");
+        if (password !== confirmPassword) throw new Error("Passwords do not match.");
+
+        const { error } = await supabase.auth.admin.updateUserById(secretaryId, { password });
+        if (error) throw error;
+        console.log("Password updated successfully");
+        setSuccess("Password updated successfully.");
+        setPassword("");
+        setConfirmPassword("");
+      }
+
+      setTimeout(() => {
+        onClose();
+        setSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      console.error("Error updating secretary:", err);
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getTitle = () => {
     switch (type) {
-      case "name":
-        return "Name";
-      case "email":
-        return "Email";
-      case "password":
-        return "Reset Password";
-      default:
-        return "";
+      case "name": return "Name";
+      case "email": return "Email";
+      case "password": return "Reset Password";
+      default: return "";
     }
   };
 
   const getSubtext = () => {
     switch (type) {
-      case "name":
-        return "Enter full name to help us ensure accurate identification.";
-      case "email":
-        return "To update your email, confirm with your password.";
-      case "password":
-        return "Enter your new password and confirm it.";
-      default:
-        return "";
+      case "name": return "Enter full name to help us ensure accurate identification.";
+      case "email": return "To update your email, confirm with your password.";
+      case "password": return "Enter your new password and confirm it.";
+      default: return "";
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="w-[525px] bg-white rounded-lg p-6 font-lato">
-        {/* Back + Close Buttons */}
-        <div className="flex items-center justify-between ">
+        <div className="flex items-center justify-between">
           <Button variant="ghost" size="icon" onClick={onClose}>
             <ArrowLeftIcon className="w-5 h-5" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-          
-          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose}></Button>
         </div>
 
-        {/* Title + Subheader (Left-Aligned) */}
         <div className="text-left mb-1">
           <DialogTitle className="text-[24px] font-semibold">{getTitle()}</DialogTitle>
-          <p className="text-[12px] text-gray-500 mt-1">{getSubtext()}</p>
+          <DialogDescription className="text-[12px] text-gray-500 mt-1">{getSubtext()}</DialogDescription>
         </div>
 
-        {/* --- NAME MODAL --- */}
+        {error && (
+          <Alert className="bg-red-100 border-l-4 border-[#E46B64] text-[#E46B64] text-sm mb-2">
+            <XCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {success && (
+          <Alert className="bg-green-100 border-l-4 border-green-600 text-green-700 text-sm mb-2">
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
+
         {type === "name" && (
           <>
-            <div className="">
+            <div>
               <label className="block text-sm mb-1">First Name</label>
-              <Input placeholder="" className="border-gray-400 h-[45px] " />
+              <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} className="border-gray-400 h-[45px]" />
             </div>
-            <div className="">
+            <div>
               <label className="block text-sm mb-1">Last Name</label>
-              <Input placeholder="" className="border-gray-400 h-[45px] " />
+              <Input value={lastName} onChange={(e) => setLastName(e.target.value)} className="border-gray-400 h-[45px]" />
             </div>
-            <Button className="w-full mt-2 h-[45px] bg-[#E46B64] rounded-lg shadow-md text-white hover:shadow-md">Save Changes</Button>
+            <Button onClick={handleSave} disabled={loading} className="w-full mt-2 h-[45px] bg-[#E46B64] rounded-lg shadow-md text-white hover:shadow-md">
+              Save Changes
+            </Button>
           </>
         )}
 
-        {/* --- EMAIL MODAL --- */}
         {type === "email" && (
           <>
             <div className="mb-3">
               <label className="block text-sm mb-1">Email</label>
-             <Input placeholder="" className="border-gray-400 h-[45px] " />
+              <Input value={email} onChange={(e) => setEmail(e.target.value)} className="border-gray-400 h-[45px]" />
             </div>
             <div className="mb-4">
               <label className="block text-sm mb-1">Password</label>
-              <Input placeholder="" className="border-gray-400 h-[45px] " />
+              <Input type="password" placeholder="Enter current password" className="border-gray-400 h-[45px]" />
             </div>
-            <Button className="w-full mt-2 h-[45px] bg-[#E46B64] rounded-lg shadow-md text-white hover:shadow-md">Save Changes</Button>
+            <Button onClick={handleSave} disabled={loading} className="w-full mt-2 h-[45px] bg-[#E46B64] rounded-lg shadow-md text-white hover:shadow-md">
+              Save Changes
+            </Button>
           </>
         )}
 
-        {/* --- PASSWORD MODAL --- */}
         {type === "password" && (
           <>
             <div className="mb-3">
               <label className="block text-sm mb-1">New Password</label>
-             <Input placeholder="" className="border-gray-400 h-[45px] " />
+              <Input value={password} onChange={(e) => setPassword(e.target.value)} className="border-gray-400 h-[45px]" />
             </div>
             <div className="mb-4">
               <label className="block text-sm mb-1">Confirm New Password</label>
-              <Input placeholder="" className="border-gray-400 h-[45px] " />
+              <Input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="border-gray-400 h-[45px]" />
             </div>
-            <Button className="w-full mt-2 h-[45px] bg-[#E46B64] rounded-lg shadow-md text-white hover:shadow-md">Save Changes</Button>
+            <Button onClick={handleSave} disabled={loading} className="w-full mt-2 h-[45px] bg-[#E46B64] rounded-lg shadow-md text-white hover:shadow-md">
+              Save Changes
+            </Button>
           </>
         )}
       </DialogContent>

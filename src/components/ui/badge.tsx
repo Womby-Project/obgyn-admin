@@ -1,3 +1,5 @@
+// C:\Users\markn\Desktop\dashboard-obgyn\frontend\src\components\ui\badge.tsx
+
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -49,6 +51,11 @@ const badgeVariants = cva(
         moodTired: "bg-[#FFF8E1] text-[#F57C00] border-[#FFE0B2]",
         moodContent: "bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]",
         moodIrritable: "bg-[#FFF3E0] text-[#E65100] border-[#FFCC80]",
+
+
+        // USER BADGES
+        obgyn: "bg-blue-100 text-[#FFFFF] border border-blue-300",
+        secretary: "bg-blue-100 text-[#FFFFF] border border-blue-300",
 
     
       },
