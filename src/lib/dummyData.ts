@@ -11,11 +11,11 @@ export const appointments = Array.from({ length: 27 }, (_, i) => {
   const types = ["Consultation", "Monthly Checkup", "Follow-up Checkup"];
 
  const status =
-  i < 5 ? "done" :
-  i < 10 ? "confirmed" :
-  i < 15 ? "pending" :
-  i < 20 ? "reschedule" :
-  "cancelled";
+  i < 5 ? "Accepted" :
+  i < 10 ? "Done" :
+  i < 15 ? "Pending" :
+  i < 20 ? "Declined" :
+  "Deleted"
 
   const weeksPregnant = Math.floor(Math.random() * 30) + 1;
 

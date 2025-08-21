@@ -4,7 +4,6 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "@/components/DashboardComponents/SidebarComponent";
 import Header from "@/components/DashboardComponents/HeaderComponent";
 import { supabase } from "@/lib/supabaseClient";
-import { Toaster } from "./ui/sonner";
 
 type UserData = {
   name: string;
@@ -12,7 +11,7 @@ type UserData = {
   role: "OBGYN" | "Secretary";
 };
 
-export default function DashboardLayout() {
+export default function SecretaryLayout() {
   const [user, setUser] = useState<UserData | null>(null);
 
   // ✅ Callback to update avatar from child components

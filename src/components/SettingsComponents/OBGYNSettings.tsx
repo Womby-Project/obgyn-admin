@@ -10,7 +10,7 @@ export default function SettingsOBGYN() {
             label: "Profile",
             value: "profile",
             content: (
-                <Profilepage />
+                <Profilepage  />
             ),
             
         },
@@ -39,7 +39,7 @@ export default function SettingsOBGYN() {
                             Manage your account preferences and system configurations.
                         </h2>
                     </div>
-                    <CustomTabs tabs={tabs} defaultValue="profile" />
+                    <CustomTabs tabs={tabs} defaultValue="profile"   />
                 </div>
             </div>
         </main>

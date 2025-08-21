@@ -1,14 +1,14 @@
 // src/App.tsx
 import { Routes, Route } from 'react-router-dom';
 
-import Dashboard from '@/pages/Dashboard';
-import AppointmentPage from '@/pages/AppointmentPage';
-import Inbox from '@/pages/InboxPage';
+import Dashboard from '@/pages/OBGYN/Dashboard';
+import AppointmentPage from '@/pages/OBGYN/AppointmentPage';
+import Inbox from '@/pages/OBGYN/InboxPage';
 import NotesPage from './components/AppointmentComponents/NoteComponent';
-import PatientDirectoryPage from './pages/PatientDirectoryPage';
+import PatientDirectoryPage from './pages/OBGYN/PatientDirectoryPage';
 import PatientProfilePage from '@/components/PatientDirectoryComponent/PatientProfileComponent'
 import PatientMaternalInsight from '@/components/PatientDirectoryComponent/DirectoryInsightComponent'
-import SecretaryManagement from './pages/SecretayManagementPage';
+import SecretaryManagement from './pages/OBGYN/SecretayManagementPage';
 import OBGYNSetting from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import BasicInformation from '@/components/RegistrationComponents/BasicInformationComponent'
@@ -17,8 +17,11 @@ import ProfessionalInformation from '@/components/RegistrationComponents/Profess
 import MultiStepLayout from './components/RegistrationComponents/RegisterLayout';
 import SetSchedulePage from '@/components/RegistrationComponents/AvailabilityRegistrationComponent'
 import CreationPage from '@/components/RegistrationComponents/FinishRegisterComponent'
-import ProtectedLayout from "@/components/ProtectedRoutesLayout";
-import DashboardLayout from './components/DashboardLayout';
+import ProtectedLayout from "@/layouts/ProtectedRoutesLayout";
+import DashboardLayout from './layouts/DashboardLayout';
+import SecretaryDashboard from '@/pages/SECRETARY/SecretaryDashboardPage';
+import SecretaryAppointmentDirectory from '@/components/SecretaryComponents/SecretaryAppointmentDirectory'
+
 
 export default function App() {
   return (
@@ -35,8 +38,8 @@ export default function App() {
         <Route path="/finalpage" element={<CreationPage />} />
       </Route>
 
-      {/* Protected - ONE wrapper for all private routes */}
-      <Route element={<ProtectedLayout />}>
+
+      <Route element={<ProtectedLayout allowedRoles={["obgyn"]} />}>
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/inbox" element={<Inbox />} />
@@ -49,6 +52,16 @@ export default function App() {
           <Route path="/settings" element={<OBGYNSetting />} />
         </Route>
       </Route>
+
+      {/* Protected - Secretary Pages */}
+      <Route element={<ProtectedLayout allowedRoles={["secretary"]} />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/secretarydashboard" element={<SecretaryDashboard />} />
+          <Route path="/secretarydashboard/appointmentdirectory" element={<SecretaryAppointmentDirectory />} />
+          
+        </Route>
+      </Route>
+
 
     </Routes>
   );

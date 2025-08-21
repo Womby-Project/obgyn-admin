@@ -6,10 +6,12 @@ import { CheckCircle2, Circle } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { supabase } from "@/lib/supabaseClient"
 import { toast } from "sonner"
+import { Toaster } from "../ui/sonner"
 
 export default function SecurityPage() {
   const [oldPassword, setOldPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("") // ✅ New state
   const [twoFA, setTwoFA] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -50,6 +52,18 @@ export default function SecurityPage() {
   // 🔹 Update password
   const handleUpdatePassword = async () => {
     if (!userId) return
+
+    // ✅ Error handling for confirm password
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match")
+      return
+    }
+
+    if (!allValid) {
+      toast.error("Please meet all password requirements")
+      return
+    }
+
     setLoading(true)
     try {
       // Reauthenticate with old password
@@ -68,6 +82,7 @@ export default function SecurityPage() {
       toast.success("Password updated successfully!")
       setOldPassword("")
       setNewPassword("")
+      setConfirmPassword("")
     } catch (err: any) {
       toast.error(err.message || "Password update failed")
     } finally {
@@ -93,7 +108,8 @@ export default function SecurityPage() {
   }
 
   return (
-    <div className="flex flex-col gap-10 max-w-full px-4 md:px-8 lg:px-0">
+    <div className="flex flex-col gap-5 max-w-full px-4 md:px-8 lg:px-0">
+            <Toaster position="top-right"/>
       {/* Change Password Section */}
       <div className="flex flex-col gap-6">
         <h1 className="text-[20px] font-semibold text-gray-800">Change Password</h1>
@@ -119,6 +135,16 @@ export default function SecurityPage() {
             placeholder="Enter New password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
+          />
+
+          {/* Confirm Password */}
+          <p className="text-[17px] mt-5">Confirm Password</p>
+          <Input
+            className="w-full max-w-md h-[45px] border border-gray-300"
+            type="password"
+            placeholder="Re-enter New password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
           />
 
           {/* Password Requirements */}
@@ -193,8 +219,6 @@ export default function SecurityPage() {
             </p>
           </div>
         </div>
-
-        {/* Save Button (Optional, redundant if toggle saves instantly) */}
       </div>
     </div>
   )

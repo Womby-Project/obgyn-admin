@@ -1,0 +1,523 @@
+import { useState, useMemo, useEffect } from "react";
+import { Input } from "@/components/ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import SearchIcon from "@mui/icons-material/Search";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { PopcornIcon } from "lucide-react";
+import SwapVertIcon from "@mui/icons-material/SwapVert";
+import { Badge, badgeVariants } from "@/components/ui/badge";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationItem,
+    PaginationLink,
+    PaginationPrevious,
+    PaginationNext,
+} from "@/components/ui/pagination";
+import { Icon } from "@iconify/react";
+import { supabase } from "@/lib/supabaseClient"; // adjust path
+import RescheduleDialog from "../modals/rescheduleModal";
+import { Button } from "../ui/button";
+
+const itemsPerPage = 10;
+const capitalize = (str: string) =>
+    str.charAt(0).toUpperCase() + str.slice(1);
+
+type AppointmentRow = {
+    id: string;
+    status: string;
+    appointment_type: string | null;
+    appointment_datetime: string;
+    patient: {
+        first_name: string;
+        last_name: string;
+        weeks_count: number | null;
+    } | null;
+};
+
+type AppointmentUIRow = {
+    id: string;
+    patient: string;
+    weeksPregnant: number | string;
+    date: string;
+    time: string;
+    type: string;
+    status: string;
+    dateTime: Date;
+};
+
+
+
+
+export default function SecretaryAppointmentDirectory() {
+    const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState("");
+    const [typeFilter, setTypeFilter] = useState("");
+    const [sortOption, setSortOption] = useState("");
+    const [mobileColumn, setMobileColumn] = useState("patient");
+
+
+    const [openReschedule, setOpenReschedule] = useState(false);
+    const [, setOpenFollowUp] = useState(false);
+    const [selectedAppointment, setSelectedAppointment] = useState<AppointmentUIRow | null>(null);
+    const [actionValue, setActionValue] = useState("");
+
+    const fetchAppointments = async () => {
+        setLoading(true);
+
+
+
+
+
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+            console.error("Error fetching user:", userError?.message);
+            setLoading(false);
+            return;
+        }
+
+        const { data: secUser, error: secError } = await supabase
+            .from("secretary_users")
+            .select("obgyn_id")
+            .eq("id", user.id)
+            .single();
+
+        if (secError || !secUser) {
+            console.warn("User is not a secretary or no obgyn_id found");
+            setAppointments([]);
+            setLoading(false);
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from("appointments")
+            .select(`
+      id,
+      appointment_datetime,
+      status,
+      appointment_type,
+      patient:patient_users (
+        id,
+        first_name,
+        last_name,
+        weeks_count
+      )
+    `)
+            .eq("obgyn_id", secUser.obgyn_id)
+            .order("appointment_datetime", { ascending: false });
+
+        if (error) {
+            console.error("Error fetching appointments:", error.message);
+        } else {
+            setAppointments(data as unknown as AppointmentRow[]);
+        }
+
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        fetchAppointments();
+    }, []);
+
+
+
+    const updateAppointmentStatus = async (id: string, status: string) => {
+        const { error } = await supabase
+            .from("appointments")
+            .update({ status })
+            .eq("id", id);
+
+        if (error) {
+            console.error("Error updating appointment status:", error.message);
+        } else {
+            // Refresh table after update
+            await fetchAppointments();
+        }
+    };
+
+    const mappedAppointments = useMemo<AppointmentUIRow[]>(() => {
+        return appointments.map((a) => {
+            const rawDate = new Date(a.appointment_datetime);
+
+            return {
+                id: a.id,
+                patient: a.patient
+                    ? `${a.patient.first_name} ${a.patient.last_name}`
+                    : "Unknown Patient",
+                weeksPregnant: a.patient?.weeks_count ?? "-",
+                date: rawDate.toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                }),
+                time: rawDate.toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                }),
+                type: a.appointment_type ?? "-",
+                status: a.status,
+                dateTime: rawDate,
+            };
+        });
+    }, [appointments]);
+
+    // Filters + search
+    const filteredAppointments = useMemo(() => {
+        let filtered = [...mappedAppointments];
+        if (search) {
+            filtered = filtered.filter((a) =>
+                a.patient.toLowerCase().includes(search.toLowerCase())
+            );
+        }
+        if (statusFilter) {
+            filtered = filtered.filter(
+                (a) => a.status.toLowerCase() === statusFilter.toLowerCase()
+            );
+        }
+        if (typeFilter) {
+            filtered = filtered.filter((a) =>
+                a.type.toLowerCase().includes(typeFilter)
+            );
+        }
+        if (sortOption === "Sort1") {
+            filtered.sort((a, b) => b.dateTime.getTime() - a.dateTime.getTime());
+        } else if (sortOption === "Sort2") {
+            filtered.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
+        }
+        return filtered;
+    }, [search, statusFilter, typeFilter, sortOption, mappedAppointments]);
+
+    const totalPages = Math.ceil(filteredAppointments.length / itemsPerPage);
+    const paginatedAppointments = filteredAppointments.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+    const hasAppointments = filteredAppointments.length > 0;
+
+    return (
+        <div className="flex min-h-screen bg-white">
+            <div className="flex flex-col flex-1 transition-all duration-300 bg-gray-50 shadow-md pb-5">
+                <main className="mt-7 px-4 md:px-6">
+                    <div className="bg-white rounded-md shadow-md mx-auto p-6">
+                        <div className="flex flex-col gap-9 items-start w-full">
+                            <div className="flex flex-col p-1 w-full">
+                                <h1 className="text-[24px] font-lato font-semibold">
+                                    Appointments
+                                </h1>
+                                <h2 className="text-[12px] font-lato text-gray-500">
+                                    View all patient appointments
+                                </h2>
+
+                                {/* Filters */}
+                                <div className="flex flex-wrap gap-4 mt-5 w-full justify-between">
+                                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                        <div className="relative w-full sm:w-[300px]">
+                                            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fontSize="small" />
+                                            <Input
+                                                className="pl-10 border border-gray-300 w-full"
+                                                placeholder="Search by name"
+                                                value={search}
+                                                onChange={(e) => setSearch(e.target.value)}
+                                            />
+                                        </div>
+                                        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value === "allstatus" ? "" : value)}>
+                                            <SelectTrigger className="w-[120px] border border-gray-300">
+                                                <SelectValue placeholder="Status" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="allstatus">All</SelectItem>
+                                                <SelectItem value="accepted">Accepted</SelectItem>
+                                                <SelectItem value="done">Done</SelectItem>
+                                                <SelectItem value="pending">Pending</SelectItem>
+                                                <SelectItem value="declined">Declined</SelectItem>
+
+                                            </SelectContent>
+                                        </Select>
+                                        <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value === "alltypes" ? "" : value)}>
+                                            <SelectTrigger className="w-[140px] border border-gray-300">
+                                                <SelectValue placeholder="Type" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="alltypes">All</SelectItem>
+                                                <SelectItem value="monthly">Monthly Checkup</SelectItem>
+                                                <SelectItem value="follow">Follow-up Checkup</SelectItem>
+                                                <SelectItem value="consultation">Consultation</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <Select value={sortOption} onValueChange={setSortOption}>
+                                        <SelectTrigger className="w-full sm:w-[120px] border border-gray-300 px-2 flex justify-between">
+                                            <SelectValue placeholder="Sort" />
+                                            <SwapVertIcon className="text-gray-500" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Sort1">Newest</SelectItem>
+                                            <SelectItem value="Sort2">Oldest</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            {/* Table */}
+                            <div className="w-full">
+                                {loading ? (
+                                    <div className="flex items-center  justify-center gap-2">
+                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600 "></div>
+                                        <p className="text-sm text-gray-500">Loading appointments...</p>
+                                    </div>
+                                ) : hasAppointments ? (
+                                    <>
+                                        {/* Desktop Table */}
+                                        <div className="hidden md:block overflow-x-auto">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead className="min-w-[160px]">Patient</TableHead>
+                                                        <TableHead className="min-w-[180px]">Date & Time</TableHead>
+                                                        <TableHead className="min-w-[140px]">Type</TableHead>
+                                                        <TableHead className="min-w-[160px]">Appointment Status</TableHead>
+                                                        <TableHead className="min-w-[100px] text-left">Actions</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody className="font-lato text-[12px]">
+                                                    {paginatedAppointments.map((appt) => (
+                                                        <TableRow key={appt.id}>
+                                                            <TableCell>
+                                                                <div className="flex flex-col">
+                                                                    <button className="font-lato text-[15px] text-left text-[#1F2937] hover:underline  cursor-pointer hover:text-[#1F2937]">
+                                                                        {appt.patient}
+                                                                    </button>
+                                                                    <span className="text-[11px] text-gray-400">{appt.weeksPregnant} weeks pregnant</span>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[15px]">{appt.date}</span>
+                                                                    <span className="text-[13px] text-muted-foreground">{appt.time}</span>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell>{appt.type}</TableCell>
+                                                            <TableCell>
+                                                                <Badge variant={appt.status.toLowerCase() as any}>
+                                                                    {capitalize(appt.status)}
+                                                                </Badge>
+                                                            </TableCell>
+                                                            <TableCell className="text-left flex items-center gap-2">
+                                                                {/* Accept button */}
+                                                                <Button
+                                                                    className="w-8 h-8 bg-[#22C55E] border border-[#1FB355]"
+                                                                    variant="ghost"
+                                                                    onClick={() => updateAppointmentStatus(appt.id, "Accepted")}
+                                                                    disabled={appt.status !== "Pending"} // only enabled if Pending
+                                                                >
+                                                                    <Icon icon="mingcute:check-fill" className="text-white font-bold" />
+                                                                </Button>
+
+                                                                {/* Decline button */}
+                                                                <Button
+                                                                    className="w-8 h-8 bg-[#E46B64] border border-[#DE5C54]"
+                                                                    variant="ghost"
+                                                                    onClick={() => updateAppointmentStatus(appt.id, "Declined")}
+                                                                    disabled={appt.status !== "Pending"} // only enabled if Pending
+                                                                >
+                                                                    <Icon icon="mingcute:close-fill" className="text-white font-bold" />
+                                                                </Button>
+
+                                                                {/* Action menu (resched/follow-up) */}
+                                                                <Select
+                                                                    value={actionValue}
+                                                                    onValueChange={(value) => {
+                                                                        setSelectedAppointment(appt);
+
+                                                                        if (value === "resched") {
+                                                                            setOpenReschedule(true);
+                                                                        } else if (value === "follow") {
+                                                                            setOpenFollowUp(true);
+                                                                        }
+                                                                        setActionValue("");
+                                                                    }}
+                                                                    disabled={appt.status === "Declined"} // disabled only if Declined
+                                                                >
+                                                                    <SelectTrigger
+                                                                        className={`w-8 h-8 flex items-center justify-center rounded-lg border border-[#DBDEE2] 
+        [&>svg.lucide-chevron-down]:hidden
+        bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                                                                    >
+                                                                        <Icon icon="uiw:more" className="w-5 h-5 text-gray-600" />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent className="w-[230px] border border-gray-200 shadow-md rounded-lg mr-28">
+                                                                        <SelectItem value="resched" className="pr-2 [&>span:first-child]:hidden">
+                                                                            <div className="flex items-center gap-2 text-[#6B7280]">
+                                                                                <Icon icon="pepicons-pop:rewind-time" className="w-5 h-5 text-gray-600" />
+                                                                                <p className="text-[15px]">Reschedule</p>
+                                                                            </div>
+                                                                        </SelectItem>
+                                                                        <SelectItem value="follow" className="pr-2 [&>span:first-child]:hidden">
+                                                                            <div className="flex items-center gap-2 text-[#6B7280] font-lato">
+                                                                                <Icon icon="mdi:calendar" className="w-5 h-5 text-gray-600" />
+                                                                                <p className="text-[15px]">Schedule for Follow-up</p>
+                                                                            </div>
+                                                                        </SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </TableCell>
+
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+
+                                        Mobile Table
+                                        <div className="block md:hidden w-full mt-4">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <label className="text-sm font-medium">Select Column:</label>
+                                                <select
+                                                    value={mobileColumn}
+                                                    onChange={(e) => setMobileColumn(e.target.value)}
+                                                    className="border border-gray-300 text-sm px-2 py-1 rounded-md"
+                                                >
+                                                    <option value="patient">Patient</option>
+                                                    <option value="date">Date & Time</option>
+                                                    <option value="type">Type</option>
+                                                    <option value="status">Status</option>
+                                                    <option value="actions">Actions</option>
+                                                </select>
+                                            </div>
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>{capitalize(mobileColumn)}</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {paginatedAppointments.map((appt) => (
+                                                        <TableRow key={appt.id}>
+                                                            <TableCell>
+                                                                {mobileColumn === "patient" && (
+                                                                    <>
+                                                                        <p className="font-semibold">{appt.patient}</p>
+                                                                        <p className="text-xs text-gray-400">{appt.weeksPregnant} weeks pregnant</p>
+                                                                    </>
+                                                                )}
+                                                                {mobileColumn === "date" && <p>{appt.date}</p>}
+                                                                {mobileColumn === "type" && <p>{appt.type}</p>}
+                                                                {mobileColumn === "status" && (
+                                                                    <Badge variant={appt.status.toLowerCase() as any}>
+                                                                        {capitalize(appt.status)}
+                                                                    </Badge>
+                                                                )}
+                                                                {mobileColumn === "actions" && (
+                                                                    <Select>
+                                                                        <SelectTrigger className="w-8 h-8 flex items-center justify-center rounded-lg border border-[#DBDEE2] shadow-sm">
+                                                                            <Icon icon="uiw:more" className="w-5 h-5 text-gray-600" />
+                                                                        </SelectTrigger>
+                                                                    </Select>
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="flex justify-center items-center h-40 w-full">
+                                        <Alert className="flex items-center gap-3 px-4 py-3 w-fit border border-gray-300">
+                                            <PopcornIcon className="h-5 w-5 text-muted-foreground" />
+                                            <div>
+                                                <AlertTitle className="text-sm font-medium">No appointments to display</AlertTitle>
+                                                <AlertDescription className="text-sm text-muted-foreground">
+                                                    There are currently no upcoming appointments available.
+                                                </AlertDescription>
+                                            </div>
+                                        </Alert>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Pagination */}
+                            {hasAppointments && !loading && (
+                                <div className="w-full flex flex-col sm:flex-row items-center justify-between text-[#616161] mt-6">
+                                    <p className="text-[12px] font-semibold text-muted-foreground whitespace-nowrap">
+                                        Showing {paginatedAppointments.length + (currentPage - 1) * itemsPerPage} out of {filteredAppointments.length} appointments
+                                    </p>
+                                    <Pagination>
+                                        <PaginationContent className="gap-1">
+                                            <PaginationItem>
+                                                <PaginationPrevious
+                                                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                                                    className={currentPage === 1 ? "opacity-50 pointer-events-none" : "text-[#E46B64]"}
+                                                />
+                                            </PaginationItem>
+                                            {[...Array(totalPages)].map((_, i) => (
+                                                <PaginationItem key={i}>
+                                                    <PaginationLink
+                                                        onClick={() => setCurrentPage(i + 1)}
+                                                        isActive={currentPage === i + 1}
+                                                        className={currentPage === i + 1 ? "bg-[#E46B64] text-white" : "text-[#E46B64]"}
+                                                    >
+                                                        {i + 1}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ))}
+                                            <PaginationItem>
+                                                <PaginationNext
+                                                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                                                    className={currentPage === totalPages ? "opacity-50 pointer-events-none" : "text-[#E46B64]"}
+                                                />
+                                            </PaginationItem>
+                                        </PaginationContent>
+                                    </Pagination>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </main>
+
+
+            </div>
+            <RescheduleDialog
+                open={openReschedule}
+                onClose={() => setOpenReschedule(false)}
+                appointment={selectedAppointment ?? undefined}
+                onConfirm={async (newDateTime) => {
+                    if (!selectedAppointment) return;
+
+                    const { error } = await supabase
+                        .from("appointments")
+                        .update({
+                            appointment_datetime: newDateTime,
+                            status: "Accepted" // optional: mark as accepted on reschedule
+                        })
+                        .eq("id", selectedAppointment.id);
+
+                    if (error) {
+                        console.error("Error rescheduling appointment:", error.message);
+                    } else {
+                        await fetchAppointments(); // refresh table
+                        setOpenReschedule(false);
+                    }
+                }}
+            />
+
+        </div>
+    );
+}

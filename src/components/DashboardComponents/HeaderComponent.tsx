@@ -5,6 +5,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge"; // import badge
 import { supabase } from "@/lib/supabaseClient"; // import supabase
 import { useNavigate } from 'react-router-dom';
+import { BadgeCheckIcon, ShieldCheck } from 'lucide-react';
 
 
 
@@ -61,19 +62,36 @@ function Header({
       <Popover>
         <PopoverTrigger asChild>
           <div className="flex sm:flex-row flex-col items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded-md transition text-center sm:text-left">
-            <Avatar className="w-10 h-10">
+            <Avatar className="w-10 h-10 bg-gray-100">
               <AvatarImage src={avatarUrl} alt={name} />
               <AvatarFallback>{initial}</AvatarFallback>
             </Avatar>
-            <div className="text-sm leading-tight flex flex-col">
-              <p className="font-semibold text-gray-800">{name}</p>
-              <Badge
-                variant={title?.toLowerCase() === "obgyn" ? "obgyn" : title?.toLowerCase() === "secretary" ? "secretary" : "default"}
-                className="w-fit px-2 py-0 text-xs"
-              >
-                {title}
-              </Badge>
+            <div className="flex flex-col text-sm leading-tight">
+              {/* Name */}
+              <p className="font-semibold text-gray-900 text-base">{name}</p>
+
+              {/* Role + Icon */}
+              <div className="flex items-center gap-2 mt-0.5">
+                <Badge
+                  variant={
+                    title?.toLowerCase() === "obgyn"
+                      ? "obgyn"
+                      : title?.toLowerCase() === "secretary"
+                        ? "secretary"
+                        : "default"
+                  }
+                  className="px-2 py-0.5 text-xs rounded-md"
+                >
+                  {title}
+
+                  <ShieldCheck className="text-indigo-600 h-4 w-4" />
+                </Badge>
+
+
+
+              </div>
             </div>
+
           </div>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-44 p-2 bg-white border border-gray-100">

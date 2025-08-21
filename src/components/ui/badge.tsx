@@ -21,11 +21,12 @@ const badgeVariants = cva(
           "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
 
         // Statuses for Appointments
-        pending: "bg-yellow-100 text-yellow-800 border border-yellow-300",
-        confirmed: "bg-green-100 text-green-800 border border-green-300",
+        pending: "bg-[#FCFBDC] text-[#A9A523] border border-[#E6E389]",
+        accepted: "bg-[#E6FCDC] text-[#166534] border border-[#BCFFAC]",
         cancelled: "bg-red-100 text-red-800 border border-red-300",
         done: "bg-[#F3F3F3] text-[#616161] border border-[#E5E5E5]",
-        reschedule:"bg-[#FCEEDC] text-[#ED9237] border border-[#FFD49D]",
+        declined: "bg-[#FFE3E3] text-[#C03636] border border-[#FFCBCB]",
+        rescheduled: "bg-[#FCEEDC] text-[#ED9237] border border-[#FFD49D]",
 
         //Statuses for Patient Directory
         Inactive: "bg-[#F3F3F3] text-[#616161] border-[#E5E5E5]",
@@ -54,10 +55,11 @@ const badgeVariants = cva(
 
 
         // USER BADGES
-        obgyn: "bg-blue-100 text-[#FFFFF] border border-blue-300",
-        secretary: "bg-blue-100 text-[#FFFFF] border border-blue-300",
+        obgyn: "bg-pink-100 text-pink-800 border border-pink-300",
+        secretary: "bg-green-100 text-green-800 border border-green-300",
 
-    
+
+
       },
     },
     defaultVariants: {

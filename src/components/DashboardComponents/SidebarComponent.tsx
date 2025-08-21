@@ -27,6 +27,8 @@ export default function Sidebar({ user }: SidebarProps) {
     navigate("/");
   };
 
+
+
   return (
     <aside className="fixed left-0 w-[260px] bg-white border-r h-screen shadow-md flex flex-col border-gray-200 overflow-hidden">
       {/* Logo */}
@@ -49,23 +51,35 @@ export default function Sidebar({ user }: SidebarProps) {
             OVERVIEW
           </p>
           <nav className="px-8 space-y-2">
-            <SidebarLink icon={<HomeIcon fontSize="medium" />} text="Dashboard" to="/dashboard" />
-            <SidebarLink icon={<QuestionAnswerIcon fontSize="medium" />} text="Inbox" to="/inbox" />
+            {user?.role === "Secretary" ? (
+              <SidebarLink icon={<HomeIcon fontSize="medium" />} text="Dashboard" to="/secretarydashboard" />
+            ) : (
+              <>
+                <SidebarLink icon={<HomeIcon fontSize="medium" />} text="Dashboard" to="/dashboard" />
+                <SidebarLink icon={<QuestionAnswerIcon fontSize="medium" />} text="Inbox" to="/inbox" />
+              </>
+            )}
           </nav>
 
           <p className="ml-8 mt-6 text-[14px] font-semibold text-left text-gray-400 uppercase mb-2">
             MANAGEMENT
           </p>
           <nav className="px-8 space-y-2">
-            <SidebarLink icon={<CalendarMonthIcon fontSize="medium" />} text="Appointments" to="/appointments" />
-            <SidebarLink icon={<PeopleIcon fontSize="medium" />} text="Patients" to="/patientdirectory" />
-            {/* Show "Secretary" link only for OBGYN */}
-            {user?.role === "OBGYN" && (
-              <SidebarLink
-                icon={<PersonSearchOutlinedIcon fontSize="medium" />}
-                text="Secretary"
-                to="/secretarymanagement"
-              />
+            {user?.role === "Secretary" ? (
+              <SidebarLink icon={<CalendarMonthIcon fontSize="medium" />} text="Appointments" to="/secretarydashboard/appointmentdirectory" />
+            ) : (
+              <>
+                <SidebarLink icon={<CalendarMonthIcon fontSize="medium" />} text="Appointments" to="/appointments" />
+                <SidebarLink icon={<PeopleIcon fontSize="medium" />} text="Patients" to="/patientdirectory" />
+                {/* Show "Secretary" link only for OBGYN */}
+                {user?.role === "OBGYN" && (
+                  <SidebarLink
+                    icon={<PersonSearchOutlinedIcon fontSize="medium" />}
+                    text="Secretary"
+                    to="/secretarymanagement"
+                  />
+                )}
+              </>
             )}
           </nav>
         </div>
@@ -79,7 +93,7 @@ export default function Sidebar({ user }: SidebarProps) {
             className="flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 w-full"
           >
             <LogoutIcon fontSize="medium" />
-            <span className="text-base">Logout</span>
+            <span className="text-base cursor-pointer">Logout</span>
           </button>
         </div>
       </div>
@@ -98,10 +112,10 @@ function SidebarLink({ icon, text, to }: SidebarLinkProps) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium ${
-          isActive ? "bg-[#E5E7EB] text-[#4B5563] w-[190px]" : "text-gray-700 hover:bg-gray-100"
+        `flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium ${isActive ? "bg-[#E5E7EB] text-[#4B5563] w-[190px]" : "text-gray-700 hover:bg-gray-100"
         }`
       }
+      end={to === "/dashboard" || to === "/secretarydashboard"}
     >
       {icon}
       <span className="text-base">{text}</span>

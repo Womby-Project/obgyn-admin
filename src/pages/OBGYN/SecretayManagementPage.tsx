@@ -28,8 +28,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-import EditDialogModals from "@/components/SecretaryComponents/EditDialogModals";
-import SecretaryCreationModal from '@/components/SecretaryComponents/AddSecretaryModal'
+import EditDialogModals from "@/components/modals/EditDialogModals";
+import SecretaryCreationModal from '@/components/modals/AddSecretaryModal'
 import { X } from "lucide-react";
 
 export default function SecretaryManagement() {
