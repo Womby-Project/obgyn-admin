@@ -74,20 +74,13 @@ export default function RescheduleDialog({
 
     // Reset when dialog opens/closes
     useEffect(() => {
-        if (open && appointment) {
-            setDate(appointment.dateTime)
-            setTime(
-                appointment.dateTime.toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                })
-            )
-        } else {
+        if (open) {
             setDate(undefined)
             setTime("")
             setReason("")
         }
-    }, [appointment, open])
+    }, [open])   // 👈 always exactly one dependency
+
 
     const handleConfirm = async () => {
         if (!appointment || !date || !time) return
@@ -178,11 +171,11 @@ export default function RescheduleDialog({
                         {/* Original Info */}
                         <div className="flex flex-col">
                             <h1 className="text-base font-medium">Original Appointment</h1>
-                            <p className="text-[#616161] text-[15px]">
-                                {appointment.date} at {appointment.time}
+                            <p className="text-[#616161] text-[12px]">
+                                {appointment.date} {appointment.time}
                             </p>
-                            <p className="text-[#616161] text-[13px]">
-                                Patient: {appointment.patient}
+                            <p className="text-[#616161] text-[12px] ">
+                                Name: {appointment.patient}
                             </p>
                         </div>
 
@@ -201,9 +194,10 @@ export default function RescheduleDialog({
                                             !date && "text-muted-foreground"
                                         )}
                                     >
-                                        {date ? format(date, "PPP") : <span>Pick a date</span>}
+                                        {date ? format(date, "PPP") : <span>Pick a new date</span>}
                                         <CalendarIcon className="ml-2 h-4 w-4 opacity-90" />
                                     </Button>
+
                                 </PopoverTrigger>
                                 <PopoverContent
                                     className="w-auto p-0 border-gray-400"
@@ -237,9 +231,10 @@ export default function RescheduleDialog({
                                             !time && "text-muted-foreground"
                                         )}
                                     >
-                                        {time || <span>Pick a time</span>}
+                                        {time || <span>Pick a new time</span>}
                                         <Clock className="ml-2 h-4 w-4 opacity-90" />
                                     </Button>
+
                                 </PopoverTrigger>
                                 <PopoverContent
                                     className="w-40 p-0 border border-gray-300 rounded-md shadow-lg bg-white"
@@ -275,7 +270,7 @@ export default function RescheduleDialog({
                                 type="text"
                                 value={reason}
                                 onChange={(e) => setReason(e.target.value)}
-                                placeholder="Enter reason"
+                                placeholder="Enter reason for schedule"
                                 className="h-[45px] border border-[#ECEEF0]"
                             />
                         </div>
@@ -285,8 +280,10 @@ export default function RescheduleDialog({
                             <Button
                                 onClick={handleConfirm}
                                 disabled={!date || !time || loading}
+                                className="w-full h-[45px] text-white bg-[#E46B64] rounded-[100px]"
+
                             >
-                                {loading ? "Saving..." : "Confirm"}
+                                {loading ? "Saving..." : "Update Schedule"}
                             </Button>
                         </div>
                     </>

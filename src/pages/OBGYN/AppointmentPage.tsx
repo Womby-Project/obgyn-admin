@@ -38,6 +38,7 @@ import { HoverCard } from "@radix-ui/react-hover-card";
 import type { VariantProps } from "class-variance-authority";
 import { supabase } from "@/lib/supabaseClient";
 import RescheduleDialog from "@/components/modals/rescheduleModal"
+import FollowUpDialog from '@/components/modals/followupModal'
 
 
 const itemsPerPage = 10;
@@ -54,7 +55,13 @@ type AppointmentRow = {
     last_name: string;
     weeks_count: number | null;
   } | null;
+  appointment_followups: {
+    id: string;
+    follow_up_datetime: string;
+    notes?: string | null;
+  }[];
 };
+
 
 
 type AppointmentUIRow = {
@@ -87,11 +94,12 @@ export default function AppointmentPage() {
 
 
 
+
+
   useEffect(() => {
     const fetchAppointments = async () => {
       setLoading(true);
 
-      // 1. Get logged-in user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         console.error("Error fetching user:", userError?.message);
@@ -102,76 +110,85 @@ export default function AppointmentPage() {
       let obgynId: string | null = null;
 
       try {
-        // 1. Check if user is Secretary FIRST (this avoids RLS issues)
-        const { data: secUser, error: secError } = await supabase
+        const { data: secUser } = await supabase
           .from("secretary_users")
           .select("obgyn_id")
           .eq("id", user.id)
           .maybeSingle();
 
-        if (secUser && secUser.obgyn_id) {
-          obgynId = secUser.obgyn_id;  // secretary's assigned OB-GYN
-          console.log("User is Secretary, assigned to OB-GYN:", obgynId);
+        if (secUser?.obgyn_id) {
+          obgynId = secUser.obgyn_id;
         } else {
-          // 2. Only check OB-GYN table if user is NOT a secretary
-          const { data: obgynUser, error: obgynError } = await supabase
+          const { data: obgynUser } = await supabase
             .from("obgyn_users")
             .select("id")
             .eq("id", user.id)
             .maybeSingle();
 
-          if (obgynUser) {
-            obgynId = obgynUser.id;  // user is the OB-GYN
-            console.log("User is OB-GYN:", obgynId);
-          }
+          if (obgynUser) obgynId = obgynUser.id;
         }
 
         if (!obgynId) {
-          console.warn("User is neither OB-GYN nor Secretary with linked OB-GYN");
           setAppointments([]);
           setLoading(false);
           return;
         }
 
-        // 3. Fetch appointments for the determined obgynId
         const { data, error } = await supabase
           .from("appointments")
           .select(`
-          id,
-          appointment_datetime,
-          status,
-          appointment_type,
-          patient:patient_users (
-            id,
-            first_name,
-            last_name,
-            weeks_count
-          ),
-          obgyn:obgyn_users (
-            id,
-            first_name,
-            last_name
-          )
-        `)
+    id,
+    appointment_datetime,
+    status,
+    appointment_type,
+    patient:patient_users (
+      id,
+      first_name,
+      last_name,
+      weeks_count
+    ),
+    appointment_followups ( id, follow_up_datetime )
+  `)
           .eq("obgyn_id", obgynId)
           .order("appointment_datetime", { ascending: false });
 
-        if (error) {
-          console.error("Error fetching appointments:", error.message);
-        } else {
-          setAppointments(data as unknown as AppointmentRow[]);
-          console.log("Fetched appointments:", data.length);
-        }
 
-      } catch (error) {
-        console.error("Unexpected error in fetchAppointments:", error);
+
+        if (error) console.error("Error fetching appointments:", error.message);
+        else setAppointments(data as unknown as AppointmentRow[]);
+      } catch (err) {
+        console.error("Unexpected error:", err);
       }
 
       setLoading(false);
-      console.log("Logged in user:", user.id, "Resolved obgynId:", obgynId);
     };
 
+
     fetchAppointments();
+
+    const channel = supabase
+      .channel("appointments-sync")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "appointment_followups" },
+        (payload) => {
+          console.log("🔔 New follow-up:", payload.new);
+          fetchAppointments();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "appointments" },
+        (payload) => {
+          console.log("🔔 Appointment updated:", payload.new);
+          fetchAppointments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
 
@@ -181,34 +198,30 @@ export default function AppointmentPage() {
 
   const mappedAppointments = useMemo<AppointmentUIRow[]>(() => {
     return appointments.map((a) => {
-      const rawDate = new Date(a.appointment_datetime);
+      // if follow-ups exist, get the latest one
+      let latestDate = new Date(a.appointment_datetime);
 
-      // formatted for display
-      const formattedDate = rawDate.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-
-      const formattedTime = rawDate.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      if (a.appointment_followups && a.appointment_followups.length > 0) {
+        const sorted = [...a.appointment_followups].sort(
+          (f1, f2) => new Date(f2.follow_up_datetime).getTime() - new Date(f1.follow_up_datetime).getTime()
+        );
+        latestDate = new Date(sorted[0].follow_up_datetime);
+      }
 
       return {
         id: a.id,
-        patient: a.patient
-          ? `${a.patient.first_name} ${a.patient.last_name}`
-          : "Unknown Patient",
+        patient: a.patient ? `${a.patient.first_name} ${a.patient.last_name}` : "Unknown Patient",
         weeksPregnant: a.patient?.weeks_count ?? "-",
-        date: formattedDate,
-        time: formattedTime,
+        date: latestDate.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
+        time: latestDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
         type: a.appointment_type ?? "-",
-        status: a.status,
-        dateTime: rawDate, // ✅ use this for sorting
+        // 👇 if follow-up exists, mark it as "Follow-up Scheduled"
+        status: a.appointment_followups?.length > 0 ? "Scheduled for Follow-Up" : a.status,
+        dateTime: latestDate,
       };
     });
   }, [appointments]);
+
 
 
 
@@ -253,6 +266,9 @@ export default function AppointmentPage() {
   );
 
   const hasAppointments = filteredAppointments.length > 0;
+
+
+
 
   return (
     <div className="flex min-h-screen bg-white">
@@ -321,7 +337,8 @@ export default function AppointmentPage() {
               {/* Table */}
               <div className="w-full">
                 {loading ? (
-                  <div className="flex justify-center items-center h-40">
+                  <div className="flex items-center  justify-center gap-2">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600 "></div>
                     <p className="text-sm text-gray-500">Loading appointments...</p>
                   </div>
                 ) : hasAppointments ? (
@@ -580,6 +597,30 @@ export default function AppointmentPage() {
           }}
         />
 
+        <FollowUpDialog
+          open={openFollowUp}
+          onClose={() => {
+            setOpenFollowUp(false);
+            setSelectedAppointment(null);
+          }}
+          appointment={selectedAppointment ?? undefined}
+          onConfirm={(newFollowUp) => {
+            setAppointments((prev) =>
+              prev.map((a) =>
+                a.id === newFollowUp.appointment_id
+                  ? {
+                    ...a,
+                    status: "Scheduled for Follow-Up",
+                    appointment_followups: [
+                      ...(a.appointment_followups || []),
+                      newFollowUp,
+                    ],
+                  }
+                  : a
+              )
+            );
+          }}
+        />
 
 
 

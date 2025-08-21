@@ -32,6 +32,9 @@ import { Icon } from "@iconify/react";
 import { supabase } from "@/lib/supabaseClient"; // adjust path
 import RescheduleDialog from "../modals/rescheduleModal";
 import { Button } from "../ui/button";
+import FollowUpDialog from "@/components/modals/followupModal";
+import { toast } from "sonner";
+import { Toaster } from "../ui/sonner";
 
 const itemsPerPage = 10;
 const capitalize = (str: string) =>
@@ -47,6 +50,11 @@ type AppointmentRow = {
         last_name: string;
         weeks_count: number | null;
     } | null;
+    followups: {
+        id: string;
+        follow_up_datetime: string;
+        reason: string | null;
+    }[];   // 👈 include this
 };
 
 type AppointmentUIRow = {
@@ -75,7 +83,7 @@ export default function SecretaryAppointmentDirectory() {
 
 
     const [openReschedule, setOpenReschedule] = useState(false);
-    const [, setOpenFollowUp] = useState(false);
+    const [openFollowUp, setOpenFollowUp] = useState(false);
     const [selectedAppointment, setSelectedAppointment] = useState<AppointmentUIRow | null>(null);
     const [actionValue, setActionValue] = useState("");
 
@@ -109,32 +117,70 @@ export default function SecretaryAppointmentDirectory() {
         const { data, error } = await supabase
             .from("appointments")
             .select(`
+    id,
+    appointment_datetime,
+    status,
+    appointment_type,
+    patient:patient_users (
       id,
-      appointment_datetime,
-      status,
-      appointment_type,
-      patient:patient_users (
-        id,
-        first_name,
-        last_name,
-        weeks_count
-      )
-    `)
+      first_name,
+      last_name,
+      weeks_count
+    ),
+    followups:appointment_followups (
+      id,
+      follow_up_datetime,
+      reason
+    )
+  `)
             .eq("obgyn_id", secUser.obgyn_id)
-            .order("appointment_datetime", { ascending: false });
+            .order("appointment_datetime", { ascending: false })
+            .order("follow_up_datetime", { foreignTable: "appointment_followups", ascending: false }) // 👈 order followups
+            .limit(1, { foreignTable: "appointment_followups" }); // 👈 only latest follow-up
+
 
         if (error) {
-            console.error("Error fetching appointments:", error.message);
+            console.error("❌ Error fetching appointments:", error.message);
         } else {
+            console.log("✅ Appointments fetched:", data);
             setAppointments(data as unknown as AppointmentRow[]);
         }
+
 
         setLoading(false);
     };
 
     useEffect(() => {
         fetchAppointments();
+
+        const channel = supabase
+            .channel("appointments-sync")
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "public", table: "appointment_followups" },
+                (payload) => {
+                    console.log("🔔 New follow-up created:", payload.new);
+                    fetchAppointments(); // refresh secretary’s list
+                }
+            )
+            .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "appointments" },
+                (payload) => {
+                    console.log("🔔 Appointment updated:", payload.new);
+                    fetchAppointments(); // refresh secretary’s list
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, []);
+
+
+
+
 
 
 
@@ -147,14 +193,21 @@ export default function SecretaryAppointmentDirectory() {
         if (error) {
             console.error("Error updating appointment status:", error.message);
         } else {
-            // Refresh table after update
+            console.log(`✅ Appointment ${id} updated to ${status}`);
             await fetchAppointments();
         }
     };
 
+
+
+
+
     const mappedAppointments = useMemo<AppointmentUIRow[]>(() => {
         return appointments.map((a) => {
-            const rawDate = new Date(a.appointment_datetime);
+            const latestFollowup = a.followups?.[0];
+            const latestDate = latestFollowup
+                ? new Date(latestFollowup.follow_up_datetime)
+                : new Date(a.appointment_datetime);
 
             return {
                 id: a.id,
@@ -162,21 +215,23 @@ export default function SecretaryAppointmentDirectory() {
                     ? `${a.patient.first_name} ${a.patient.last_name}`
                     : "Unknown Patient",
                 weeksPregnant: a.patient?.weeks_count ?? "-",
-                date: rawDate.toLocaleDateString("en-US", {
+                date: latestDate.toLocaleDateString("en-US", {
                     year: "numeric",
                     month: "short",
                     day: "numeric",
                 }),
-                time: rawDate.toLocaleTimeString("en-US", {
+                time: latestDate.toLocaleTimeString("en-US", {
                     hour: "2-digit",
                     minute: "2-digit",
                 }),
                 type: a.appointment_type ?? "-",
                 status: a.status,
-                dateTime: rawDate,
+                dateTime: latestDate,
             };
         });
     }, [appointments]);
+
+
 
     // Filters + search
     const filteredAppointments = useMemo(() => {
@@ -351,9 +406,10 @@ export default function SecretaryAppointmentDirectory() {
                                                                         } else if (value === "follow") {
                                                                             setOpenFollowUp(true);
                                                                         }
-                                                                        setActionValue("");
+
+                                                                        setActionValue(""); // reset menu after click
                                                                     }}
-                                                                    disabled={appt.status === "Declined"} // disabled only if Declined
+                                                                    disabled={appt.status === "Declined"}
                                                                 >
                                                                     <SelectTrigger
                                                                         className={`w-8 h-8 flex items-center justify-center rounded-lg border border-[#DBDEE2] 
@@ -379,13 +435,14 @@ export default function SecretaryAppointmentDirectory() {
                                                                 </Select>
                                                             </TableCell>
 
+
                                                         </TableRow>
                                                     ))}
                                                 </TableBody>
                                             </Table>
                                         </div>
 
-                                        Mobile Table
+                                        {/* Mobile Table
                                         <div className="block md:hidden w-full mt-4">
                                             <div className="flex items-center gap-2 mb-2">
                                                 <label className="text-sm font-medium">Select Column:</label>
@@ -436,7 +493,7 @@ export default function SecretaryAppointmentDirectory() {
                                                     ))}
                                                 </TableBody>
                                             </Table>
-                                        </div>
+                                        </div> */}
                                     </>
                                 ) : (
                                     <div className="flex justify-center items-center h-40 w-full">
@@ -518,6 +575,18 @@ export default function SecretaryAppointmentDirectory() {
                 }}
             />
 
+            <FollowUpDialog
+                open={openFollowUp}
+                onClose={() => setOpenFollowUp(false)}
+                appointment={selectedAppointment || undefined}
+                onConfirm={() => {
+
+                    fetchAppointments(); // refresh from DB
+                }}
+            />
+
+
+            <Toaster />
         </div>
     );
 }

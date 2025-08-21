@@ -27,6 +27,8 @@ const badgeVariants = cva(
         done: "bg-[#F3F3F3] text-[#616161] border border-[#E5E5E5]",
         declined: "bg-[#FFE3E3] text-[#C03636] border border-[#FFCBCB]",
         rescheduled: "bg-[#FCEEDC] text-[#ED9237] border border-[#FFD49D]",
+         "scheduled for follow-up": "bg-blue-100 text-blue-800",
+        
 
         //Statuses for Patient Directory
         Inactive: "bg-[#F3F3F3] text-[#616161] border-[#E5E5E5]",
