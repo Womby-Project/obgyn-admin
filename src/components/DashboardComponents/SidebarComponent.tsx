@@ -116,6 +116,13 @@ export default function Sidebar({ user }: SidebarProps) {
           </button>
         </div>
 
+
+        {/* Footer Section */}
+          <div className=" text-center text-xs text-gray-400">
+            <p>v1.0.0</p>
+            <p>© {new Date().getFullYear()} Wombly. All rights reserved.</p>
+          </div>
+
       </div>
     </aside>
   );
