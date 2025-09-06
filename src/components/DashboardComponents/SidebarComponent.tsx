@@ -8,6 +8,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PersonSearchOutlinedIcon from "@mui/icons-material/PersonSearchOutlined";
 import { supabase } from "@/lib/supabaseClient";
+import packageJson from "../../../package.json"
 
 type UserData = {
   name: string;
@@ -119,7 +120,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
         {/* Footer Section */}
           <div className=" text-center text-xs text-gray-400">
-            <p>v1.0.0</p>
+            <p>v{packageJson.version}</p>
             <p>© {new Date().getFullYear()} Wombly. All rights reserved.</p>
           </div>
 
