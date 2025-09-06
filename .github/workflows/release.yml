@@ -9,7 +9,10 @@ jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # ✅ required for pushing back CHANGELOG & package.json
+      contents: write   # for pushing tags, changelog, package.json updates
+      issues: write     # ✅ allow semantic-release to comment/close issues
+      pull-requests: write  # ✅ allow semantic-release to comment on PRs
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
