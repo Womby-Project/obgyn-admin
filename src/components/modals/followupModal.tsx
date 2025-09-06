@@ -123,7 +123,7 @@ export default function FollowUpDialog({
     const { error: updateError } = await supabase
       .from("appointments")
       .update({
-        status: "Scheduled for Follow-Up",
+        status: "Accepted",
         appointment_datetime: followUpDate.toISOString(), // ⬅️ update main date
       })
       .eq("id", appointment.id);

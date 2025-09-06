@@ -1,6 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import Sidebar from "@/components/DashboardComponents/SidebarComponent";
-import Header from "@/components/DashboardComponents/HeaderComponent";
+
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -63,10 +62,9 @@ export default function MaternalInsightsComponent() {
     if (!patient) {
         return (
             <div className="flex h-screen flex-col md:flex-row">
-                <Sidebar />
                 <div className="flex flex-col flex-1 md:ml-[260px] bg-gray-50">
                     <header className="fixed top-0 left-0 md:left-[260px] right-0 h-10 bg-white shadow-sm z-10">
-                        <Header />
+                    
                     </header>
                     <main className="fixed top-10 left-0 md:left-[260px] right-0 bottom-0 overflow-hidden mt-2">
                         <div className="h-full w-full overflow-y-auto scrollbar-hide p-6">
@@ -80,10 +78,10 @@ export default function MaternalInsightsComponent() {
 
     return (
         <div className="flex h-screen flex-col md:flex-row w-full">
-            <Sidebar />
+
             <div className="flex flex-col flex-1 md:ml-[260px] bg-gray-50 w-full">
                 <header className="fixed top-0 left-0 md:left-[260px] right-0 h-10 bg-white shadow-sm z-10">
-                    <Header />
+        
                 </header>
 
                 <main className="fixed top-10 left-0 md:left-[260px] right-0 bottom-0 overflow-hidden mt-2">

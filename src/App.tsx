@@ -1,17 +1,15 @@
 // src/App.tsx
 import { Routes, Route } from "react-router-dom"
- // ✅ correct (shadcn/ui)
-  // 👈 import this
+import PageTitle from "@/components/PageTitle"
 
-import Dashboard from "@/pages/OBGYN/Dashboard"
-import AppointmentPage from "@/pages/OBGYN/AppointmentPage"
-import Inbox from "@/pages/OBGYN/InboxPage"
-import NotesPage from "./components/AppointmentComponents/NoteComponent"
-import PatientDirectoryPage from "./pages/OBGYN/PatientDirectoryPage"
+import Dashboard from "@/pages/OBGYN/OBGYNDashboardPage"
+import AppointmentPage from "@/pages/OBGYN/OBGYNAppointmentPage"
+import Inbox from "@/pages/OBGYN/OBGYNInboxPage"
+import PatientDirectoryPage from "./pages/OBGYN/OBGYNPatientDirectoryPage"
 import PatientProfilePage from "@/components/PatientDirectoryComponent/PatientProfileComponent"
 import PatientMaternalInsight from "@/components/PatientDirectoryComponent/DirectoryInsightComponent"
-import SecretaryManagement from "./pages/OBGYN/SecretayManagementPage"
-import OBGYNSetting from "./pages/SettingsPage"
+import SecretaryManagement from "./pages/OBGYN/OBGYNManageSecretary"
+import OBGYNSetting from "./pages/OBGYN/OBGYNSettings"
 import LoginPage from "./pages/LoginPage"
 import BasicInformation from "@/components/RegistrationComponents/BasicInformationComponent"
 import SetPassword from "@/components/RegistrationComponents/SecurityPasswordComponents"
@@ -22,49 +20,233 @@ import CreationPage from "@/components/RegistrationComponents/FinishRegisterComp
 import ProtectedLayout from "@/layouts/ProtectedRoutesLayout"
 import DashboardLayout from "./layouts/DashboardLayout"
 import SecretaryDashboard from "@/pages/SECRETARY/SecretaryDashboardPage"
-import SecretaryAppointmentDirectory from "@/components/SecretaryComponents/SecretaryAppointmentDirectory"
+import SecretaryAppointmentDirectory from "@/pages/SECRETARY/SecretaryAppointmentDirectory"
+import SecretarySettings from '@/pages/SECRETARY/SecretarySettingsLayout';
+import SecretaryPatientDirectory from '@/pages/SECRETARY/SecretaryPatientDirectory'
 
+// 
 export default function App() {
   return (
-    <>
-      <Routes>
-        {/* Public */}
-        <Route path="/" element={<LoginPage />} />
+    <Routes>
+      {/* Public */}
+      <Route
+        path="/"
+        element={
+          <PageTitle title="Welcome back!">
+            <LoginPage />
+          </PageTitle>
+        }
+      />
 
-        {/* Registration */}
-        <Route element={<MultiStepLayout />}>
-          <Route path="/basicinformation" element={<BasicInformation />} />
-          <Route path="/setpassword" element={<SetPassword />} />
-          <Route path="/professionalinformation" element={<ProfessionalInformation />} />
-          <Route path="/setschedule" element={<SetSchedulePage />} />
-          <Route path="/finalpage" element={<CreationPage />} />
-        </Route>
+      {/* Registration */}
+      <Route element={<MultiStepLayout />}>
+        <Route
+          path="/basicinformation"
+          element={
+            <PageTitle title="Basic Information - Registration">
+              <BasicInformation />
+            </PageTitle>
+          }
+        />
+        <Route
+          path="/setpassword"
+          element={
+            <PageTitle title="Set Password - Registration">
+              <SetPassword />
+            </PageTitle>
+          }
+        />
+        <Route
+          path="/professionalinformation"
+          element={
+            <PageTitle title="Professional Information - Registration">
+              <ProfessionalInformation />
+            </PageTitle>
+          }
+        />
+        <Route
+          path="/setschedule"
+          element={
+            <PageTitle title="Set Schedule - Registration">
+              <SetSchedulePage />
+            </PageTitle>
+          }
+        />
+        <Route
+          path="/finalpage"
+          element={
+            <PageTitle title="Finish Registration">
+              <CreationPage />
+            </PageTitle>
+          }
+        />
+      </Route>
 
-        <Route element={<ProtectedLayout allowedRoles={["obgyn"]} />}>
-          <Route element={<DashboardLayout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/inbox" element={<Inbox />} />
-            <Route path="/appointments" element={<AppointmentPage />} />
-            <Route path="/appointments/notes" element={<NotesPage />} />
-            <Route path="/patientdirectory" element={<PatientDirectoryPage />} />
-            <Route path="/patientdirectory/profile" element={<PatientProfilePage />} />
-            <Route path="/patientdirectory/maternalinsight" element={<PatientMaternalInsight />} />
-            <Route path="/secretarymanagement" element={<SecretaryManagement />} />
-            <Route path="/settings" element={<OBGYNSetting />} />
+      {/* Protected - OBGYN */}
+      <Route element={<ProtectedLayout allowedRoles={["obgyn"]} />}>
+        <Route element={<DashboardLayout />}>
+
+          {/* Dashboard */}
+          <Route
+            path="/dashboard"
+            element={
+              <PageTitle title="Dashboard - OBGYN">
+                <Dashboard />
+              </PageTitle>
+            }
+          />
+
+          {/* Inbox */}
+          <Route
+            path="/inbox"
+            element={
+              <PageTitle title="Inbox - OBGYN">
+                <Inbox />
+              </PageTitle>
+            }
+          />
+
+          {/* Appointments */}
+          <Route path="/appointments">
+            <Route
+              index
+              element={
+                <PageTitle title="Appointments - OBGYN">
+                  <AppointmentPage />
+                </PageTitle>
+              }
+            />
+            <Route
+              path="patientprofile/:patientId"
+              element={
+                <PageTitle title="Patient Profile - OBGYN">
+                  <PatientProfilePage />
+                </PageTitle>
+              }
+            />
           </Route>
-        </Route>
 
-        {/* Protected - Secretary Pages */}
-        <Route element={<ProtectedLayout allowedRoles={["secretary"]} />}>
-          <Route element={<DashboardLayout />}>
-            <Route path="/secretarydashboard" element={<SecretaryDashboard />} />
-            <Route path="/secretarydashboard/appointmentdirectory" element={<SecretaryAppointmentDirectory />} />
+          {/* Patient Directory */}
+          <Route path="/patientdirectory">
+            <Route
+              index
+              element={
+                <PageTitle title="Patient Directory - OBGYN">
+                  <PatientDirectoryPage />
+                </PageTitle>
+              }
+            />
+            <Route
+              path="maternalinsight"
+              element={
+                <PageTitle title="Maternal Insight - OBGYN">
+                  <PatientMaternalInsight />
+                </PageTitle>
+              }
+            />
+            <Route
+              path="patientprofile/:patientId"
+              element={
+                <PageTitle title="Patient Profile - OBGYN">
+                  <PatientProfilePage />
+                </PageTitle>
+              }
+            />
           </Route>
-        </Route>
-      </Routes>
 
-      {/* 👇 Mount Toaster once at root */}
-   
-    </>
+          {/* Secretary Management */}
+          <Route
+            path="/secretarymanagement"
+            element={
+              <PageTitle title="Secretary Management - OBGYN">
+                <SecretaryManagement />
+              </PageTitle>
+            }
+          />
+
+          {/* Settings */}
+          <Route
+            path="/settings"
+            element={
+              <PageTitle title="Settings - OBGYN">
+                <OBGYNSetting />
+              </PageTitle>
+            }
+          />
+
+        </Route>
+      </Route>
+
+
+      {/* Protected - Secretary */}
+      <Route element={<ProtectedLayout allowedRoles={["secretary"]} />}>
+        <Route element={<DashboardLayout />}>
+
+          {/* Dashboard */}
+          <Route
+            path="/secretarydashboard"
+            element={
+              <PageTitle title="Secretary Dashboard">
+                <SecretaryDashboard />
+              </PageTitle>
+            }
+          />
+
+          {/* Appointment Directory */}
+          <Route path="/secretarydashboard/appointmentdirectory">
+            <Route
+              index
+              element={
+                <PageTitle title="Appointment Directory - Secretary">
+                  <SecretaryAppointmentDirectory />
+                </PageTitle>
+              }
+            />
+            <Route
+              path="patientprofile/:patientId"
+              element={
+                <PageTitle title="Patient Profile - Secretary">
+                  <PatientProfilePage />
+                </PageTitle>
+              }
+            />
+          </Route>
+
+          {/* Patient Directory */}
+          <Route path="/secretarydashboard/patientdirectory">
+            <Route
+              index
+              element={
+                <PageTitle title="Patient Directory - Secretary">
+                  <SecretaryPatientDirectory />
+                </PageTitle>
+              }
+            />
+            <Route
+              path="patientprofile/:patientId"
+              element={
+                <PageTitle title="Patient Profile - Secretary">
+                  <PatientProfilePage />
+                </PageTitle>
+              }
+            />
+          </Route>
+
+          {/* Settings */}
+          <Route
+            path="/secretarydashboard/settings"
+            element={
+              <PageTitle title="Settings - Secretary">
+                <SecretarySettings />
+              </PageTitle>
+            }
+          />
+
+        </Route>
+      </Route>
+
+
+
+    </Routes>
   )
 }

@@ -9,10 +9,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useNavigate } from "react-router-dom";
 
 export default function SecretaryAppointment() {
   const [patients, setPatients] = useState<any[]>([]);
-
+  const navigate = useNavigate();
+  
   useEffect(() => {
     const fetchPatients = async () => {
       const { data, error } = await supabase
@@ -46,7 +48,9 @@ export default function SecretaryAppointment() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-800">Patient Directory</h2>
-        <button className="text-sm text-[#E46B64] font-medium hover:underline">
+        <button
+          onClick={() => navigate("/secretarydashboard/patientdirectory")}
+          className="text-sm text-[#E46B64] font-medium hover:underline">
           View All
         </button>
       </div>

@@ -32,7 +32,7 @@ export default function Sidebar({ user }: SidebarProps) {
   return (
     <aside className="fixed left-0 w-[260px] bg-white border-r h-screen shadow-md flex flex-col border-gray-200 overflow-hidden">
       {/* Logo */}
-      <div className="flex items-center h-[64px] px-6 border-b border-gray-200">
+      <div className="flex items-center h-[64px] px-6 border-b border-gray-200 ml-3">
         <img
           src="/src/assets/wombly-logo.png"
           alt="womblylogo"
@@ -40,7 +40,7 @@ export default function Sidebar({ user }: SidebarProps) {
         />
         <div className="ml-3 leading-tight">
           <h1 className="text-[17px] font-semibold text-gray-900">Wombly</h1>
-          <p className="text-[13px] text-gray-500">OBGYN-Dashboard</p>
+
         </div>
       </div>
 
@@ -66,12 +66,14 @@ export default function Sidebar({ user }: SidebarProps) {
           </p>
           <nav className="px-8 space-y-2">
             {user?.role === "Secretary" ? (
-              <SidebarLink icon={<CalendarMonthIcon fontSize="medium" />} text="Appointments" to="/secretarydashboard/appointmentdirectory" />
+              <>
+                <SidebarLink icon={<CalendarMonthIcon fontSize="medium" />} text="Appointments" to="/secretarydashboard/appointmentdirectory" />
+                <SidebarLink icon={<PeopleIcon fontSize="medium" />} text="Patient" to="/secretarydashboard/patientdirectory" />
+              </>
             ) : (
               <>
                 <SidebarLink icon={<CalendarMonthIcon fontSize="medium" />} text="Appointments" to="/appointments" />
                 <SidebarLink icon={<PeopleIcon fontSize="medium" />} text="Patients" to="/patientdirectory" />
-                {/* Show "Secretary" link only for OBGYN */}
                 {user?.role === "OBGYN" && (
                   <SidebarLink
                     icon={<PersonSearchOutlinedIcon fontSize="medium" />}
@@ -81,13 +83,30 @@ export default function Sidebar({ user }: SidebarProps) {
                 )}
               </>
             )}
+
           </nav>
         </div>
 
         {/* Account */}
+        {/* Account */}
         <div className="px-8 mb-6 space-y-2">
-          <p className="text-[14px] font-semibold uppercase text-left text-gray-400 mb-2">Account</p>
-          <SidebarLink icon={<SettingsIcon fontSize="medium" />} text="Settings" to="/settings" />
+          <p className="text-[14px] font-semibold uppercase text-left text-gray-400 mb-2">
+            Account
+          </p>
+          {user?.role === "Secretary" ? (
+            <SidebarLink
+              icon={<SettingsIcon fontSize="medium" />}
+              text="Settings"
+              to="/secretarydashboard/settings"
+            />
+          ) : (
+            <SidebarLink
+              icon={<SettingsIcon fontSize="medium" />}
+              text="Settings"
+              to="/settings"
+            />
+          )}
+
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 w-full"
@@ -96,6 +115,7 @@ export default function Sidebar({ user }: SidebarProps) {
             <span className="text-base cursor-pointer">Logout</span>
           </button>
         </div>
+
       </div>
     </aside>
   );

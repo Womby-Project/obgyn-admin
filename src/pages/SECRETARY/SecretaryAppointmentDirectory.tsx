@@ -16,10 +16,10 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PopcornIcon } from "lucide-react";
+import { Alert, AlertTitle } from "@/components/ui/alert";
+
 import SwapVertIcon from "@mui/icons-material/SwapVert";
-import { Badge, badgeVariants } from "@/components/ui/badge";
+import { Badge, } from "@/components/ui/badge";
 import {
     Pagination,
     PaginationContent,
@@ -30,11 +30,13 @@ import {
 } from "@/components/ui/pagination";
 import { Icon } from "@iconify/react";
 import { supabase } from "@/lib/supabaseClient"; // adjust path
-import RescheduleDialog from "../modals/rescheduleModal";
-import { Button } from "../ui/button";
+import RescheduleDialog from "../../components/modals/rescheduleModal";
+import { Button } from "../../components/ui/button";
 import FollowUpDialog from "@/components/modals/followupModal";
-import { toast } from "sonner";
-import { Toaster } from "../ui/sonner";
+import { Toaster } from "../../components/ui/sonner";
+import { useNavigate } from "react-router-dom";
+import HowToRegIcon from "@mui/icons-material/HowToReg";
+
 
 const itemsPerPage = 10;
 const capitalize = (str: string) =>
@@ -46,9 +48,11 @@ type AppointmentRow = {
     appointment_type: string | null;
     appointment_datetime: string;
     patient: {
+        id: string;
         first_name: string;
         last_name: string;
-        weeks_count: number | null;
+        patient_type: string
+        pregnancy_weeks: number | null;
     } | null;
     followups: {
         id: string;
@@ -59,6 +63,7 @@ type AppointmentRow = {
 
 type AppointmentUIRow = {
     id: string;
+    patientId: string | null;
     patient: string;
     weeksPregnant: number | string;
     date: string;
@@ -66,6 +71,7 @@ type AppointmentUIRow = {
     type: string;
     status: string;
     dateTime: Date;
+    patientType: string
 };
 
 
@@ -79,7 +85,7 @@ export default function SecretaryAppointmentDirectory() {
     const [statusFilter, setStatusFilter] = useState("");
     const [typeFilter, setTypeFilter] = useState("");
     const [sortOption, setSortOption] = useState("");
-    const [mobileColumn, setMobileColumn] = useState("patient");
+    const navigate = useNavigate();
 
 
     const [openReschedule, setOpenReschedule] = useState(false);
@@ -89,11 +95,6 @@ export default function SecretaryAppointmentDirectory() {
 
     const fetchAppointments = async () => {
         setLoading(true);
-
-
-
-
-
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
             console.error("Error fetching user:", userError?.message);
@@ -125,7 +126,8 @@ export default function SecretaryAppointmentDirectory() {
       id,
       first_name,
       last_name,
-      weeks_count
+      pregnancy_weeks,
+      patient_type
     ),
     followups:appointment_followups (
       id,
@@ -145,8 +147,6 @@ export default function SecretaryAppointmentDirectory() {
             console.log("✅ Appointments fetched:", data);
             setAppointments(data as unknown as AppointmentRow[]);
         }
-
-
         setLoading(false);
     };
 
@@ -177,28 +177,120 @@ export default function SecretaryAppointmentDirectory() {
             supabase.removeChannel(channel);
         };
     }, []);
+    const updateAppointmentStatus = async (
+        id: string,
+        status: string,
+        patientId?: string,
+        appointmentDateTime?: Date
+    ) => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-
-
-
-
-
-
-    const updateAppointmentStatus = async (id: string, status: string) => {
         const { error } = await supabase
             .from("appointments")
             .update({ status })
             .eq("id", id);
 
+
         if (error) {
             console.error("Error updating appointment status:", error.message);
         } else {
-            console.log(`✅ Appointment ${id} updated to ${status}`);
+            const dateStr = appointmentDateTime?.toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+            });
+
+            const timeStr = appointmentDateTime?.toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+            });
+            await sendNotification({
+                recipientId: patientId!,
+                triggeredBy: user.id,
+                type: "appointment_update",
+                title: "Appointment Accepted",
+                message: `Your appointment has been accepted by the secretary for ${dateStr} at ${timeStr}.`,
+                relatedAppointmentId: id,
+            });
+
             await fetchAppointments();
         }
     };
 
+    // NOTIFICATION
 
+    const sendNotification = async ({
+        recipientId,
+        triggeredBy,
+        type,
+        title,
+        message,
+        relatedAppointmentId,
+        relatedFollowupId,
+    }: {
+        recipientId: string;
+        triggeredBy: string;
+        type: string;
+        title: string;
+        message: string;
+        relatedAppointmentId?: string;
+        relatedFollowupId?: string;
+    }) => {
+        try {
+            // 1️⃣ Insert in-app notification into Supabase
+            const { error } = await supabase.from('notifications').insert([
+                {
+                    recipient_id: recipientId,
+                    recipient_role: 'Patient', // adjust if you want Secretary/OBGYN
+                    triggered_by: triggeredBy,
+                    type,
+                    title,
+                    message,
+                    related_appointment_id: relatedAppointmentId,
+                    related_followup_id: relatedFollowupId,
+                },
+            ]);
+
+            if (error) {
+                console.error('❌ Error inserting notification:', error.message);
+                return;
+            }
+
+            console.log('✅ In-app notification inserted');
+
+            // 2️⃣ Fetch the recipient's Expo push token
+            const { data: userData, error: userError } = await supabase
+                .from('patient_users')
+                .select('push_token')
+                .eq('id', recipientId)
+                .single();
+
+            if (userError || !userData?.push_token) {
+                console.warn('⚠️ No push token found for user:', recipientId);
+                return;
+            }
+
+            const pushToken = userData.push_token;
+
+            // 3️⃣ Send push notification via Expo
+            await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: pushToken,
+                    title,
+                    body: message,
+                    sound: 'default',
+                    data: { relatedAppointmentId, relatedFollowupId, type },
+                }),
+            });
+
+            console.log('✅ Push notification sent to device');
+        } catch (err) {
+            console.error('❌ Error sending notification:', err);
+        }
+    };
 
 
 
@@ -211,10 +303,12 @@ export default function SecretaryAppointmentDirectory() {
 
             return {
                 id: a.id,
+                patientId: a.patient?.id ?? null,
                 patient: a.patient
                     ? `${a.patient.first_name} ${a.patient.last_name}`
                     : "Unknown Patient",
-                weeksPregnant: a.patient?.weeks_count ?? "-",
+                weeksPregnant: a.patient?.pregnancy_weeks ?? "-",
+                patientType: a.patient?.patient_type ?? "N/A",
                 date: latestDate.toLocaleDateString("en-US", {
                     year: "numeric",
                     month: "short",
@@ -230,6 +324,10 @@ export default function SecretaryAppointmentDirectory() {
             };
         });
     }, [appointments]);
+
+
+
+
 
 
 
@@ -301,7 +399,7 @@ export default function SecretaryAppointmentDirectory() {
                                                 <SelectItem value="accepted">Accepted</SelectItem>
                                                 <SelectItem value="done">Done</SelectItem>
                                                 <SelectItem value="pending">Pending</SelectItem>
-                                                <SelectItem value="declined">Declined</SelectItem>
+
 
                                             </SelectContent>
                                         </Select>
@@ -356,10 +454,13 @@ export default function SecretaryAppointmentDirectory() {
                                                         <TableRow key={appt.id}>
                                                             <TableCell>
                                                                 <div className="flex flex-col">
-                                                                    <button className="font-lato text-[15px] text-left text-[#1F2937] hover:underline  cursor-pointer hover:text-[#1F2937]">
+                                                                    <button
+                                                                        onClick={() => appt.patientId && navigate(`/secretarydashboard/appointmentdirectory/patientprofile/${appt.patientId}`)}
+
+                                                                        className=" cursor-pointer font-lato text-[15px] text-left text-[#1F2937] hover:underline hover:text-[#1F2937]">
                                                                         {appt.patient}
                                                                     </button>
-                                                                    <span className="text-[11px] text-gray-400">{appt.weeksPregnant} weeks pregnant</span>
+                                                                    <span className="text-[12px] text-gray-600">{appt.patientType}, {appt.weeksPregnant} weeks </span>
                                                                 </div>
                                                             </TableCell>
                                                             <TableCell>
@@ -377,26 +478,55 @@ export default function SecretaryAppointmentDirectory() {
                                                             <TableCell className="text-left flex items-center gap-2">
                                                                 {/* Accept button */}
                                                                 <Button
-                                                                    className="w-8 h-8 bg-[#22C55E] border border-[#1FB355]"
+                                                                    className="w-8 h-8 bg-[#22C55E] border border-[#1FB355] cursor-pointer"
                                                                     variant="ghost"
-                                                                    onClick={() => updateAppointmentStatus(appt.id, "Accepted")}
-                                                                    disabled={appt.status !== "Pending"} // only enabled if Pending
+                                                                    onClick={() =>
+                                                                        updateAppointmentStatus(
+                                                                            appt.id,          // appointment id
+                                                                            "Accepted",
+                                                                            appt.patientId!,  // ✅ patient id
+                                                                            appt.dateTime     // date object
+                                                                        )
+                                                                    }
+                                                                    disabled={appt.status !== "Pending"}
                                                                 >
                                                                     <Icon icon="mingcute:check-fill" className="text-white font-bold" />
                                                                 </Button>
 
+
+
+                                                                {/* Done button */}
+                                                                {["Accepted", "Rescheduled", "Follow-up"].includes(appt.status) && (
+                                                                    <Button
+                                                                        className="w-8 h-8 bg-green-600 border border-green-500 cursor-pointer"
+                                                                        variant="ghost"
+                                                                        onClick={() =>
+                                                                            updateAppointmentStatus(
+                                                                                appt.id,
+                                                                                "Done",
+                                                                                appt.patientId!,
+                                                                                appt.dateTime
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <HowToRegIcon className="text-white" />
+                                                                    </Button>
+                                                                )}
+
+
                                                                 {/* Decline button */}
-                                                                <Button
+                                                                {/* <Button
                                                                     className="w-8 h-8 bg-[#E46B64] border border-[#DE5C54]"
                                                                     variant="ghost"
                                                                     onClick={() => updateAppointmentStatus(appt.id, "Declined")}
                                                                     disabled={appt.status !== "Pending"} // only enabled if Pending
                                                                 >
                                                                     <Icon icon="mingcute:close-fill" className="text-white font-bold" />
-                                                                </Button>
+                                                                </Button> */}
 
                                                                 {/* Action menu (resched/follow-up) */}
                                                                 <Select
+
                                                                     value={actionValue}
                                                                     onValueChange={(value) => {
                                                                         setSelectedAppointment(appt);
@@ -414,7 +544,7 @@ export default function SecretaryAppointmentDirectory() {
                                                                     <SelectTrigger
                                                                         className={`w-8 h-8 flex items-center justify-center rounded-lg border border-[#DBDEE2] 
         [&>svg.lucide-chevron-down]:hidden
-        bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+        bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer`}
                                                                     >
                                                                         <Icon icon="uiw:more" className="w-5 h-5 text-gray-600" />
                                                                     </SelectTrigger>
@@ -442,68 +572,14 @@ export default function SecretaryAppointmentDirectory() {
                                             </Table>
                                         </div>
 
-                                        {/* Mobile Table
-                                        <div className="block md:hidden w-full mt-4">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <label className="text-sm font-medium">Select Column:</label>
-                                                <select
-                                                    value={mobileColumn}
-                                                    onChange={(e) => setMobileColumn(e.target.value)}
-                                                    className="border border-gray-300 text-sm px-2 py-1 rounded-md"
-                                                >
-                                                    <option value="patient">Patient</option>
-                                                    <option value="date">Date & Time</option>
-                                                    <option value="type">Type</option>
-                                                    <option value="status">Status</option>
-                                                    <option value="actions">Actions</option>
-                                                </select>
-                                            </div>
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>{capitalize(mobileColumn)}</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {paginatedAppointments.map((appt) => (
-                                                        <TableRow key={appt.id}>
-                                                            <TableCell>
-                                                                {mobileColumn === "patient" && (
-                                                                    <>
-                                                                        <p className="font-semibold">{appt.patient}</p>
-                                                                        <p className="text-xs text-gray-400">{appt.weeksPregnant} weeks pregnant</p>
-                                                                    </>
-                                                                )}
-                                                                {mobileColumn === "date" && <p>{appt.date}</p>}
-                                                                {mobileColumn === "type" && <p>{appt.type}</p>}
-                                                                {mobileColumn === "status" && (
-                                                                    <Badge variant={appt.status.toLowerCase() as any}>
-                                                                        {capitalize(appt.status)}
-                                                                    </Badge>
-                                                                )}
-                                                                {mobileColumn === "actions" && (
-                                                                    <Select>
-                                                                        <SelectTrigger className="w-8 h-8 flex items-center justify-center rounded-lg border border-[#DBDEE2] shadow-sm">
-                                                                            <Icon icon="uiw:more" className="w-5 h-5 text-gray-600" />
-                                                                        </SelectTrigger>
-                                                                    </Select>
-                                                                )}
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </div> */}
                                     </>
                                 ) : (
                                     <div className="flex justify-center items-center h-40 w-full">
                                         <Alert className="flex items-center gap-3 px-4 py-3 w-fit border border-gray-300">
-                                            <PopcornIcon className="h-5 w-5 text-muted-foreground" />
+                                            <Icon icon="tabler:face-id-error" className="w-5 h-5 " />
                                             <div>
                                                 <AlertTitle className="text-sm font-medium">No appointments to display</AlertTitle>
-                                                <AlertDescription className="text-sm text-muted-foreground">
-                                                    There are currently no upcoming appointments available.
-                                                </AlertDescription>
+
                                             </div>
                                         </Alert>
                                     </div>
@@ -557,22 +633,34 @@ export default function SecretaryAppointmentDirectory() {
                 appointment={selectedAppointment ?? undefined}
                 onConfirm={async (newDateTime) => {
                     if (!selectedAppointment) return;
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user) return;
 
                     const { error } = await supabase
                         .from("appointments")
                         .update({
                             appointment_datetime: newDateTime,
-                            status: "Accepted" // optional: mark as accepted on reschedule
+                            status: "Rescheduled",
                         })
                         .eq("id", selectedAppointment.id);
 
                     if (error) {
                         console.error("Error rescheduling appointment:", error.message);
                     } else {
-                        await fetchAppointments(); // refresh table
+                        await sendNotification({
+                            recipientId: selectedAppointment.patientId!,
+                            triggeredBy: user.id,
+                            type: "appointment_update",
+                            title: "Appointment Rescheduled",
+                            message: `Your appointment was rescheduled to ${new Date(newDateTime).toLocaleString()}.`,
+                            relatedAppointmentId: selectedAppointment.id,
+                        });
+
+                        await fetchAppointments();
                         setOpenReschedule(false);
                     }
                 }}
+
             />
 
             <FollowUpDialog

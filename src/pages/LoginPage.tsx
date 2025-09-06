@@ -72,6 +72,12 @@ export default function LoginPage() {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !loading){
+      handleLogin()
+    }
+  }
+
   return (
     <div className="flex flex-col h-screen">
       <div className="flex items-center w-screen px-4 h-17 shadow-sm border border-[#E5E7EB] bg-[#FFFFFF] gap-2">
@@ -97,6 +103,7 @@ export default function LoginPage() {
                 placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                
                 className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-sm w-[362px] h-[45px] px-4"
               />
             </div>
@@ -108,6 +115,7 @@ export default function LoginPage() {
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+               onKeyDown={handleKeyDown}
                 className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-sm w-[362px] h-[45px] px-4"
               />
             </div>
@@ -118,7 +126,9 @@ export default function LoginPage() {
             {/* Login button */}
             <button
               onClick={handleLogin}
+
               disabled={loading}
+               
               className="bg-[#E46B64] border border-[#E46B64] w-[362px] h-[45px] rounded-md mt-15 text-[#FFFFFF] hover:shadow-md cursor-pointer disabled:opacity-50"
             >
               {loading ? "Logging in..." : "Login"}

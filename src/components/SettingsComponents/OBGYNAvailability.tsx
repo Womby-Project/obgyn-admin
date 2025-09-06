@@ -6,9 +6,19 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabaseClient"
 import { toast } from "sonner"
-import {Toaster } from "@/components/ui/sonner"
+import { Toaster } from "@/components/ui/sonner"
 
-const daysOfWeek = ["Su", "M", "T", "W", "Th", "F", "Sa"]
+// Store both short label and full name
+const daysOfWeek = [
+  { short: "Su", full: "Sunday" },
+  { short: "M", full: "Monday" },
+  { short: "T", full: "Tuesday" },
+  { short: "W", full: "Wednesday" },
+  { short: "Th", full: "Thursday" },
+  { short: "F", full: "Friday" },
+  { short: "Sa", full: "Saturday" },
+];
+
 
 
 // ✅ Convert "HH:mm" to "hh:mm AM/PM"
@@ -242,7 +252,7 @@ export default function OBGYNAvailability() {
   return (
     <div className="flex flex-col max-w-full px-4 md:px-8 lg:px-0">
       <h1 className="text-[20px] font-semibold text-gray-800 ">Availability</h1>
-      <Toaster position="top-right"/>
+      <Toaster position="top-right" />
 
       {/* Schedule List */}
       <div className="gap-0 max-w-2xl mt-0">
@@ -258,14 +268,13 @@ export default function OBGYNAvailability() {
               <div className="flex gap-7">
                 {daysOfWeek.map(day => (
                   <div
-                    key={day}
-                    className={`w-10 h-10 flex items-center justify-center rounded-full text-sm mt-5 ${
-                      s.days.includes(day)
+                    key={day.full}
+                    className={`w-10 h-10 flex items-center justify-center rounded-full text-sm mt-5 ${s.days.includes(day)
                         ? "bg-[#E46B64] text-white"
                         : "bg-gray-200 text-gray-600"
-                    }`}
+                      }`}
                   >
-                    {day}
+                    {day.short}
                   </div>
                 ))}
               </div>
@@ -276,7 +285,7 @@ export default function OBGYNAvailability() {
                 </div>
                 <div className="flex-1 border-0 border-b-2 border-gray-300 pb-1">
                   <span className="block font-medium">To</span>
-                   {formatTime12Hr(s.to)}
+                  {formatTime12Hr(s.to)}
                 </div>
               </div>
             </CardContent>
@@ -317,16 +326,15 @@ export default function OBGYNAvailability() {
               <div className="flex justify-center gap-8">
                 {daysOfWeek.map(day => (
                   <button
-                    key={day}
+                    key={day.full}
                     type="button"
-                    className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      selectedDays.includes(day)
+                    className={`w-10 h-10 rounded-full flex items-center justify-center ${selectedDays.includes(day.full)
                         ? "bg-[#E46B64] text-white"
                         : "bg-gray-200 text-gray-600"
-                    }`}
-                    onClick={() => toggleDay(day)}
+                      }`}
+                    onClick={() => toggleDay(day.full)}
                   >
-                    {day}
+                    {day.short}
                   </button>
                 ))}
               </div>

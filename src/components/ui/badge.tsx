@@ -1,5 +1,4 @@
 // C:\Users\markn\Desktop\dashboard-obgyn\frontend\src\components\ui\badge.tsx
-
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -25,7 +24,6 @@ const badgeVariants = cva(
         accepted: "bg-[#E6FCDC] text-[#166534] border border-[#BCFFAC]",
         cancelled: "bg-red-100 text-red-800 border border-red-300",
         done: "bg-[#F3F3F3] text-[#616161] border border-[#E5E5E5]",
-        declined: "bg-[#FFE3E3] text-[#C03636] border border-[#FFCBCB]",
         rescheduled: "bg-[#FCEEDC] text-[#ED9237] border border-[#FFD49D]",
          "scheduled for follow-up": "bg-blue-100 text-blue-800",
         
@@ -36,7 +34,7 @@ const badgeVariants = cva(
 
         // Risk level badge
         High: "bg-[#FFE3E3] text-[#C03636] border-[#FFCBCB]",
-        Medium: "bg-[#FCFBDC] text-[#E2BC4A] border-[#F0EEAE]",
+        Moderate: "bg-[#FCFBDC] text-[#E2BC4A] border-[#F0EEAE]",
         Low: "bg-[#E6FCDC] text-[#166534] border-[#BCFFAC]",
 
         // Allergy

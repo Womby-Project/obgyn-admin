@@ -20,9 +20,10 @@ export default function CustomTabs({ tabs, defaultValue }: CustomTabsProps) {
       <div className="flex flex-wrap gap-4 sm:gap-6 md:gap-10 border-b border-gray-200">
         {tabs.map((tab) => (
           <button
+          
             key={tab.value}
             onClick={() => setActiveTab(tab.value)}
-            className={`pb-2 px-1 sm:px-2 text-sm sm:text-base font-medium transition-colors whitespace-nowrap
+            className={`pb-2 px-1 sm:px-2 text-sm sm:text-base font-medium transition-colors whitespace-nowrap cursor-pointer 
               ${
                 activeTab === tab.value
                   ? "border-b-2 border-[#E46B64] text-[#E46B64]"

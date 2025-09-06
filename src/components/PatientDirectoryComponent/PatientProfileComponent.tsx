@@ -1,5 +1,4 @@
-import { useNavigate, useLocation } from "react-router-dom";
-import Sidebar from "@/components/DashboardComponents/SidebarComponent";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
 import Header from "@/components/DashboardComponents/HeaderComponent";
 import {
     Breadcrumb,
@@ -14,9 +13,8 @@ import {
     CardHeader,
     CardTitle,
     CardContent,
-    CardFooter,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, badgeVariants } from "@/components/ui/badge";
 import {
     Select,
     SelectContent,
@@ -26,31 +24,171 @@ import {
 import { Button } from "@/components/ui/button";
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
-import { dummyPatients } from "@/lib/dummyDataPatient";
+import { useState, useEffect } from "react";
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ReportGmailerrorredOutlinedIcon from '@mui/icons-material/ReportGmailerrorredOutlined';
+import { supabase } from "@/lib/supabaseClient";
+import type { VariantProps } from "class-variance-authority";
+
+type Patient = {
+    id: string;
+    first_name: string;
+    last_name: string;
+    age: number;
+    email: string;
+    phone_number: string;
+    status: string;
+    risk_level: "Low" | "Medium" | "High";
+    appointment_type?: string;
+    emergency_contact_name?: string;
+    emergency_contact_relationship?: string;
+    emergency_contact_phone?: string;
+    allergies?: string[];
+    pre_existing_conditions?: string[];
+    mental_health_history?: string;
+    family_medical_history?: string[];
+};
 
 export default function PatientProfileComponent() {
     const navigate = useNavigate();
     const location = useLocation();
+    const [userRole, setUserRole] = useState<"obgyn" | "secretary" | null>(null);
 
-    // Get patient name from query params
-    const searchParams = new URLSearchParams(location.search);
-    const patientName = searchParams.get("name");
 
-    // Find patient in dummy data
-    const patient = dummyPatients.find(p => p.name === patientName) || null;
+    // Get patient ID from query params
+    const { patientId } = useParams<{ patientId: string }>();
 
-    // If patient not found, show fallback
+    const [patient, setPatient] = useState<Patient | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [riskLevel, setRiskLevel] = useState<"Low" | "Medium" | "High">("Low");
+
+
+
+    const getBackPath = () => {
+        if (location.pathname.includes("/secretarydashboard/appointmentdirectory")) {
+            return "/secretarydashboard/appointmentdirectory";
+        }
+        if (location.pathname.includes("/secretarydashboard/patientdirectory")) {
+            return "/secretarydashboard/patientdirectory";
+        }
+        if (location.pathname.includes("/appointments")) {
+            return "/appointments";
+        }
+        if (location.pathname.includes("/patientdirectory")) {
+            return "/patientdirectory";
+        }
+        // fallback (default obgyn appointments)
+        return "/appointments";
+    };
+
+    const backPath = getBackPath();
+
+    useEffect(() => {
+        const fetchPatient = async () => {
+            console.log("Fetching patient with ID:", patientId);
+            setLoading(true);
+
+
+            if (!patientId) {
+                console.error("❌ No patientId in URL!");
+                setLoading(false);
+                return;
+            }
+
+
+            console.log("✅ Patient ID from URL:", patientId);
+
+
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            console.log("Auth result:", user, userError);
+
+            if (userError || !user) {
+                console.error("Auth error:", userError);
+                setLoading(false);
+                return;
+            }
+
+            let obgynId: string | null = null;
+
+            // 🔹 First check if OBGYN
+            const { data: obgyn, error: obgynError } = await supabase
+                .from("obgyn_users")
+                .select("id")
+                .eq("id", user.id)
+                .maybeSingle();
+
+            if (obgyn) {
+                setUserRole("obgyn");
+                obgynId = obgyn.id;
+            } else {
+                // 🔹 Otherwise check if Secretary
+                const { data: secretary, error: secError } = await supabase
+                    .from("secretary_users")
+                    .select("obgyn_id")
+                    .eq("id", user.id)
+                    .maybeSingle();
+
+                if (secretary) {
+                    setUserRole("secretary");
+                    obgynId = secretary.obgyn_id;
+                }
+            }
+
+            console.log("Resolved role:", userRole, "with obgynId:", obgynId);
+
+
+            if (!obgynId) {
+                console.error("User is not linked to an OBGYN.");
+                setLoading(false);
+                return;
+            }
+
+            const { data: patientData, error } = await supabase
+                .from("patient_users")
+                .select("*")
+                .eq("id", patientId)
+                .eq("obgyn_id", obgynId)
+                .maybeSingle();
+
+            console.log("Supabase patient lookup:", { patientData, error });
+
+            if (error) {
+                console.error("Patient fetch error:", error);
+            } else {
+                setPatient(patientData as Patient);
+                if (patientData?.risk_level) {
+                    setRiskLevel(patientData.risk_level as "Low" | "Medium" | "High");
+                }
+            }
+
+            setLoading(false);
+        };
+
+        if (patientId) {
+            fetchPatient();
+        } else {
+            console.warn("No patientId in URL!");
+            setLoading(false);
+        }
+    }, [patientId]);
+
+
+    if (loading) {
+        return (
+            <div className="flex h-screen w-[1150px] items-center justify-center gap-2">
+                <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-red-600"></div>
+                <p className="text-sm text-gray-500">Loading Details...</p>
+            </div>
+        );
+    }
+
+
+
     if (!patient) {
         return (
             <div className="flex h-screen">
-                <Sidebar />
                 <div className="flex flex-col flex-1 ml-[260px] bg-gray-50 ">
-                    <header className="fixed top-0 left-[260px] right-0 h-10 bg-white shadow-sm z-10">
-                        <Header />
-                    </header>
+                    <header className="fixed top-0 left-[260px] right-0 h-10 bg-white shadow-sm z-10" />
                     <main className="fixed top-10 left-[260px] right-0 bottom-0 overflow-hidden mt-2">
                         <div className="h-full w-full overflow-y-auto scrollbar-hide p-6">
                             <p className="text-gray-500">Patient not found.</p>
@@ -61,11 +199,8 @@ export default function PatientProfileComponent() {
         );
     }
 
-    const [riskLevel, setRiskLevel] = useState<"Low" | "Medium" | "High">(patient.risk);
-
     return (
         <div className="flex h-screen">
-            <Sidebar />
             <div className="flex flex-col flex-1 ml-[260px] bg-gray-50 ">
                 <header className="fixed top-0 left-[260px] right-0 h-10 bg-white shadow-sm z-10">
                     <Header />
@@ -73,26 +208,23 @@ export default function PatientProfileComponent() {
 
                 <main className="fixed top-10 left-[260px] right-0 bottom-0 overflow-hidden mt-2">
                     <div className="h-full w-full overflow-y-auto scrollbar-hide p-6">
-
-                        {/* First Card Section (Title + Breadcrumb moved inside) */}
+                        {/* Patient Profile Card */}
                         <div className="flex mt-2">
                             <Card className="w-full bg-white rounded-lg shadow-md">
                                 <CardHeader className="flex flex-col gap-2">
-                                    {/* Title and Subtitle inside Card */}
                                     <div className="flex flex-col p-1 w-full">
-                                        <h1 className="text-[22px] font-lato font-semibold">
+                                        <h1 className="text-[22px] font-semibold">
                                             Patient Profile
                                         </h1>
-                                        {/* Breadcrumb */}
-                                        <h2 className="text-[11px] font-lato text-gray-500">
+                                        <h2 className="text-[11px] text-gray-500">
                                             <Breadcrumb>
                                                 <BreadcrumbList>
                                                     <BreadcrumbItem>
                                                         <BreadcrumbLink
                                                             className="hover:underline cursor-pointer"
-                                                            onClick={() => navigate("/patientdirectory")}
+                                                            onClick={() => navigate(backPath)}
                                                         >
-                                                            Patient Directory
+                                                            {backPath.includes("appointment") ? "Appointments" : "Patient Directory"}
                                                         </BreadcrumbLink>
                                                     </BreadcrumbItem>
                                                     <BreadcrumbSeparator />
@@ -106,91 +238,105 @@ export default function PatientProfileComponent() {
                                 <CardContent>
                                     <div className="flex items-center justify-between">
                                         <CardTitle className="flex items-center gap-2 font-semibold text-[20px] ">
-                                            {patient.name}
-                                            <Badge className="w-[80px]" variant={patient.status}>{patient.status}</Badge>
+                                            {patient.first_name} {patient.last_name}
+                                            <Badge
+                                                className="w-[80px]"
+                                                variant={patient.status as VariantProps<typeof badgeVariants>["variant"]}
+                                            >
+                                                {patient.status}
+                                            </Badge>
+
                                         </CardTitle>
                                         <Button
                                             className="text-[#E46B64] hover:bg-gray-100 cursor-pointer text-sm px-4 py-2"
-                                            onClick={() => navigate(`/patientdirectory/maternalinsight?name=${encodeURIComponent(patient.name)}`)}
+                                            onClick={() => navigate(`/patientdirectory/maternalinsight?id=${patient.id}`)}
                                         >
                                             View Maternal Insights &gt;
                                         </Button>
-
                                     </div>
 
                                     {/* Appointment Type */}
-                                    <div className="flex mt-4">
-                                        <CheckCircleOutlineIcon className="text-[#E46B64]" fontSize="small" />
-                                        <p className="text-[15px] text-[#E46B64] font-lato  ml-1 mb-1">{patient.appointmentType} </p>
-                                    </div>
+                                    {patient.appointment_type && (
+                                        <div className="flex mt-4">
+                                            <CheckCircleOutlineIcon className="text-[#E46B64]" fontSize="small" />
+                                            <p className="text-[15px] text-[#E46B64] ml-1">{patient.appointment_type}</p>
+                                        </div>
+                                    )}
 
                                     {/* Age */}
                                     <div className="flex items-center gap-1">
-                                        <PersonOutlineOutlinedIcon className="text-gray-500 font-semibold" fontSize="small" />
+                                        <PersonOutlineOutlinedIcon className="text-gray-500" fontSize="small" />
                                         <p className="text-[#616161] text-[15px] font-semibold">Age:</p>
                                         <p className="text-[15px] text-[#616161] font-semibold">{patient.age}</p>
                                     </div>
 
                                     {/* Risk Level */}
+                                    {/* Risk Level */}
                                     <div className="flex items-center gap-1">
                                         <ReportGmailerrorredOutlinedIcon className="text-gray-500" fontSize="small" />
                                         <p className="text-[#616161] text-[15px] font-semibold">Risk Level:</p>
-                                        <Select
-                                            value={riskLevel}
-                                            onValueChange={(value) => setRiskLevel(value as "Low" | "Medium" | "High")}
-                                        >
-                                            <SelectTrigger className="p-0 border-none bg-transparent [&>svg]:hidden">
-                                                <Badge
-                                                    className="flex font-semibold items-center justify-between gap-1 text-xs h-[24px] min-w-[90px] px-2 py-0.5 rounded-lg text-center cursor-pointer"
-                                                    variant={riskLevel}
-                                                >
-                                                    {riskLevel}
-                                                    <ChevronDown className="w-3 h-3" />
-                                                </Badge>
-                                            </SelectTrigger>
-                                            <SelectContent className="border-none">
-                                                <SelectItem value="Low">Low</SelectItem>
-                                                <SelectItem value="Medium">Medium</SelectItem>
-                                                <SelectItem value="High">High</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+
+                                        {userRole === "obgyn" ? (
+                                            <Select
+                                                value={riskLevel}
+                                                onValueChange={(value) => setRiskLevel(value as "Low" | "Medium" | "High")}
+                                            >
+                                                <SelectTrigger className="p-0 border-none bg-transparent [&>svg]:hidden">
+                                                    <Badge
+                                                        className="flex font-semibold items-center gap-1 text-xs h-[24px] min-w-[90px] px-2 rounded-lg cursor-pointer"
+                                                        variant={riskLevel}
+                                                    >
+                                                        {riskLevel}
+                                                        <ChevronDown className="w-3 h-3" />
+                                                    </Badge>
+                                                </SelectTrigger>
+                                                <SelectContent className="border-none">
+                                                    <SelectItem value="Low">Low</SelectItem>
+                                                    <SelectItem value="Medium">Medium</SelectItem>
+                                                    <SelectItem value="High">High</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <Badge
+                                                className="flex font-semibold items-center gap-1 text-xs h-[24px] min-w-[90px] px-2 rounded-lg"
+                                                variant={riskLevel}
+                                            >
+                                                {riskLevel}
+                                            </Badge>
+                                        )}
                                     </div>
 
+
                                     {/* Contact Details */}
-                                    <div className="items-center justify-between mt-10">
+                                    <div className="mt-10">
                                         <h2 className="font-semibold text-[20px]">Contact Details</h2>
-
                                         <div className="flex items-start gap-80 mt-3">
-                                            <div className="text-[16px] font-lato ">
+                                            <div>
                                                 <p>Phone Number</p>
-                                                <p className="text-[24]">{patient.phone}</p>
+                                                <p>{patient.phone_number}</p>
                                             </div>
-
-                                            <div className="text-[16px] font-lato ">
+                                            <div>
                                                 <p>Email Address</p>
-                                                <p className="text-[24]">{patient.email}</p>
+                                                <p>{patient.email}</p>
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Emergency Contacts */}
-                                    <div className="justify-between items-center mt-10">
+                                    <div className="mt-10">
                                         <h2 className="text-[14px]">Emergency Contact</h2>
-
-                                        <div className="border rounded-lg border-gray-300 flex items-start gap-50 mt-3 h-20 px-9 pt-2">
-                                            <div className="flex flex-col items-start text-[14px] font-lato">
-                                                <p className="font-[14px]">Name</p>
-                                                <p className="justify-content items-center text-[16px] font-semibold">{patient.emergencyContact.name}</p>
+                                        <div className="border rounded-lg border-gray-300 flex items-start gap-10 mt-3 h-20 px-9 pt-2">
+                                            <div>
+                                                <p>Name</p>
+                                                <p className="font-semibold">{patient.emergency_contact_name}</p>
                                             </div>
-
-                                            <div className="flex flex-col items-start text-[14px] font-lato">
-                                                <p className="font-[14px]">Relationship</p>
-                                                <p className="justify-content items-center text-[16px] font-semibold">{patient.emergencyContact.relationship}</p>
+                                            <div>
+                                                <p>Relationship</p>
+                                                <p className="font-semibold">{patient.emergency_contact_relationship}</p>
                                             </div>
-
-                                            <div className="flex flex-col items-start text-[14px] font-lato">
-                                                <p className="font-[14px]">Phone Number</p>
-                                                <p className="justify-content items-center text-[16px] font-semibold">{patient.emergencyContact.phone}</p>
+                                            <div>
+                                                <p>Phone Number</p>
+                                                <p className="font-semibold">{patient.emergency_contact_phone}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -201,18 +347,16 @@ export default function PatientProfileComponent() {
                         {/* Medical History */}
                         <Card className="w-full bg-white rounded-lg shadow-md mt-6">
                             <CardHeader>
-                                <CardTitle className="text-[20px] ">Medical History</CardTitle>
+                                <CardTitle className="text-[20px]">Medical History</CardTitle>
                             </CardHeader>
                             <CardContent>
                                 {/* Allergies */}
                                 <div className="mb-4">
-                                    <h3 className="font text-[16px] mb-2">Allergies</h3>
-                                    {patient.medicalHistory.allergies && patient.medicalHistory.allergies.length > 0 ? (
+                                    <h3 className="text-[16px] mb-2">Allergies</h3>
+                                    {patient.allergies?.length ? (
                                         <div className="flex flex-wrap gap-2">
-                                            {patient.medicalHistory.allergies.map((item, index) => (
-                                                <Badge className="w-[91px] h-[28px] text-[#222227] text-[16px]" key={index} variant="allergy">
-                                                    {item}
-                                                </Badge>
+                                            {patient.allergies.map((item, idx) => (
+                                                <Badge key={idx} variant="allergy">{item}</Badge>
                                             ))}
                                         </div>
                                     ) : (
@@ -222,13 +366,11 @@ export default function PatientProfileComponent() {
 
                                 {/* Pre-existing Conditions */}
                                 <div className="mb-4">
-                                    <h3 className="font text-[16px] mb-2">Pre-existing Conditions</h3>
-                                    {patient.medicalHistory.preExistingConditions && patient.medicalHistory.preExistingConditions.length > 0 ? (
+                                    <h3 className="text-[16px] mb-2">Pre-existing Conditions</h3>
+                                    {patient.pre_existing_conditions?.length ? (
                                         <div className="flex flex-wrap gap-2">
-                                            {patient.medicalHistory.preExistingConditions.map((item, index) => (
-                                                <Badge className="text-[#222227] text-[15px]" key={index} variant="conditions">
-                                                    {item}
-                                                </Badge>
+                                            {patient.pre_existing_conditions.map((item, idx) => (
+                                                <Badge key={idx} variant="conditions">{item}</Badge>
                                             ))}
                                         </div>
                                     ) : (
@@ -238,10 +380,10 @@ export default function PatientProfileComponent() {
 
                                 {/* Mental Health History */}
                                 <div className="mb-4">
-                                    <h3 className=" text-[16px] mb-2">Mental Health History</h3>
-                                    {patient.medicalHistory.mentalHealthHistory ? (
-                                        <div className="w-full border border-gray-300 rounded-lg p-3 bg-white">
-                                            <p className="text-[#222227] text-[16px]">{patient.medicalHistory.mentalHealthHistory}</p>
+                                    <h3 className="text-[16px] mb-2">Mental Health History</h3>
+                                    {patient.mental_health_history ? (
+                                        <div className="border rounded-lg p-3">
+                                            <p>{patient.mental_health_history}</p>
                                         </div>
                                     ) : (
                                         <p className="text-gray-500 text-[14px]">No mental health history recorded.</p>
@@ -250,16 +392,12 @@ export default function PatientProfileComponent() {
 
                                 {/* Family Medical History */}
                                 <div className="mb-4">
-                                    <h3 className=" text-[16px] mb-2">Family Medical History</h3>
-                                    {patient.medicalHistory.familyMedicalHistory && patient.medicalHistory.familyMedicalHistory.length > 0 ? (
-                                        <div className="w-full border border-gray-300 rounded-lg p-3 bg-white">
-                                            <div className="space-y-1">
-                                                {patient.medicalHistory.familyMedicalHistory.map((item, index) => (
-                                                    <p key={index} className="text-[#222227] text-[16px]">
-                                                        {item}
-                                                    </p>
-                                                ))}
-                                            </div>
+                                    <h3 className="text-[16px] mb-2">Family Medical History</h3>
+                                    {patient.family_medical_history?.length ? (
+                                        <div className="border rounded-lg p-3">
+                                            {patient.family_medical_history.map((item, idx) => (
+                                                <p key={idx}>{item}</p>
+                                            ))}
                                         </div>
                                     ) : (
                                         <p className="text-gray-500 text-[14px]">No family medical history recorded.</p>
