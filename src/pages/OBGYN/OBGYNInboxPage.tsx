@@ -164,7 +164,7 @@ export default function InboxPage() {
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
-              placeholder="Search Inbox"
+              placeholder="Search Chat"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full h-10 pl-10 pr-3 rounded-lg bg-gray-100 text-sm text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
