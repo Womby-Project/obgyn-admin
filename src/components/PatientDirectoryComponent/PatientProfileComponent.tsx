@@ -60,7 +60,7 @@ export default function PatientProfileComponent() {
 
     const [patient, setPatient] = useState<Patient | null>(null);
     const [loading, setLoading] = useState(true);
-    const [riskLevel, setRiskLevel] = useState<"Low" | "Medium" | "High">("Low");
+    const [riskLevel, setRiskLevel] = useState<"Low" | "Moderate" | "High">("Low");
 
 
 
@@ -157,7 +157,7 @@ export default function PatientProfileComponent() {
             } else {
                 setPatient(patientData as Patient);
                 if (patientData?.risk_level) {
-                    setRiskLevel(patientData.risk_level as "Low" | "Medium" | "High");
+                    setRiskLevel(patientData.risk_level as "Low" | "Moderate" | "High");
                 }
             }
 
@@ -279,7 +279,7 @@ export default function PatientProfileComponent() {
                                         {userRole === "obgyn" ? (
                                             <Select
                                                 value={riskLevel}
-                                                onValueChange={(value) => setRiskLevel(value as "Low" | "Medium" | "High")}
+                                                onValueChange={(value) => setRiskLevel(value as "Low" | "Moderate" | "High")}
                                             >
                                                 <SelectTrigger className="p-0 border-none bg-transparent [&>svg]:hidden">
                                                     <Badge
@@ -292,7 +292,7 @@ export default function PatientProfileComponent() {
                                                 </SelectTrigger>
                                                 <SelectContent className="border-none">
                                                     <SelectItem value="Low">Low</SelectItem>
-                                                    <SelectItem value="Medium">Medium</SelectItem>
+                                                    <SelectItem value="Moderate">Moderate</SelectItem>
                                                     <SelectItem value="High">High</SelectItem>
                                                 </SelectContent>
                                             </Select>

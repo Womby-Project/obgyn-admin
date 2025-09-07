@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import SearchIcon from "@mui/icons-material/Search";
-import lim from "@/assets/rebeca.png";
-import rebeca from "@/assets/lim.png";
+import rebeca from "@/assets/rebeca.png";
+import lim from "@/assets/lim.png";
 
 import CallReceivedIcon from "@mui/icons-material/CallReceived";
 import CallMissedIcon from "@mui/icons-material/CallMissed";
@@ -15,7 +15,49 @@ import DoneAllIcon from "@mui/icons-material/DoneAll";
 import { supabase } from "@/lib/supabaseClient";
 import type { User } from "@supabase/supabase-js";
 
-// Temporary dummy calls (until you have a calls table in Supabase)
+// ------------------ TYPES ------------------
+
+type ChatUser = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  profile_avatar_url?: string | null;
+  profile_picture_url?: string | null;
+};
+
+type ChatMessage = {
+  id: string;
+  sender_id: string;
+  message: string;
+  created_at: string;
+  seen?: boolean;
+  seen_at?: string | null;
+};
+
+type ChatRoom = {
+  id: string;
+  patient: ChatUser | null;
+  obgyn: ChatUser | null;
+  chat_messages: ChatMessage[];
+  created_at: string;
+};
+
+type ChatPreview = {
+  id: string;
+  name: string;
+  img: string;
+  message: string;
+  time: string;
+};
+
+type TypingStatus = {
+  user_id: string;
+  is_typing: boolean;
+  updated_at: string;
+};
+
+// ------------------ DUMMY CALLS ------------------
+
 const dummyCalls = [
   {
     id: 1,
@@ -35,73 +77,135 @@ const dummyCalls = [
   },
 ];
 
+// ------------------ COMPONENT ------------------
+
 export default function InboxPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"Chats" | "Calls">("Chats");
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
 
-  const [chats, setChats] = useState<any[]>([]);
-  const [messages, setMessages] = useState<Record<string, any[]>>({});
+  const [chats, setChats] = useState<ChatPreview[]>([]);
+  const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [newMessage, setNewMessage] = useState("");
+  const [typingStatus, setTypingStatus] = useState<TypingStatus | null>(null);
 
   const calls = dummyCalls.filter((call) =>
     call.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const selectedChat = chats.find((c) => c.id === selectedChatId);
 
-  // Fetch logged-in user
+  // ✅ Get logged-in user
   useEffect(() => {
-    const getUser = async () => {
+    const fetchUser = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (error) {
-        console.error("❌ Error fetching user:", error);
+        console.error("❌ Error fetching user:", error.message);
         return;
       }
       setCurrentUser(data.user);
     };
-    getUser();
+    fetchUser();
   }, []);
 
-  // Fetch chats the ob-gyn is in
+  // ✅ Fetch chats
   useEffect(() => {
     if (!currentUser) return;
 
     const fetchChats = async () => {
-      const { data, error } = await supabase
-        .from("chat_rooms")
-        .select(
+      try {
+        const { data, error } = await supabase
+          .from("chat_rooms")
+          .select(
+            `
+            id,
+            created_at,
+            patient:patient_id (
+              id,
+              first_name,
+              last_name,
+              profile_avatar_url
+            ),
+            obgyn:obgyn_id (
+              id,
+              first_name,
+              last_name,
+              profile_picture_url
+            ),
+            chat_messages ( id, message, created_at, sender_id, seen, seen_at )
           `
-          id,
-          created_at,
-          participants:chat_participants(user_id)
-        `
-        )
-        .order("created_at", { ascending: false });
+          )
+          .or(`patient_id.eq.${currentUser.id},obgyn_id.eq.${currentUser.id}`)
+          .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("❌ Error fetching chats:", error);
-        return;
+        if (error) throw error;
+
+
+        const formattedChats: ChatPreview[] =
+          (data as unknown as ChatRoom[])?.map((room) => {
+            const isObgyn = room.obgyn?.id === currentUser.id;
+            const other = isObgyn
+              ? (room.patient as ChatUser | null)
+              : (room.obgyn as ChatUser | null);
+
+            const latestMsg = room.chat_messages?.length
+              ? [...room.chat_messages].sort(
+                (a, b) =>
+                  new Date(b.created_at).getTime() -
+                  new Date(a.created_at).getTime()
+              )[0]
+              : null;
+
+            return {
+              id: room.id,
+              name: other
+                ? `${other.first_name ?? ""} ${other.last_name ?? ""}`.trim()
+                : "Unknown",
+              img:
+                other?.profile_avatar_url ||
+                (isObgyn
+                  ? room.obgyn?.profile_avatar_url
+                  : room.patient?.profile_avatar_url) ||
+                rebeca,
+              message: latestMsg?.message || "No messages yet",
+              time: latestMsg
+                ? new Date(latestMsg.created_at).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+                : "",
+            };
+          }) || [];
+
+        setChats(formattedChats);
+      } catch (err) {
+        console.error("❌ Error fetching chats:", err);
       }
-
-      setChats(
-        (data || []).map((room: any) => {
-          // Placeholder — later join to patient_users / obgyn_users
-          return {
-            id: room.id,
-            name: `Chat ${room.id.slice(0, 6)}`,
-            img: rebeca,
-            message: "Tap to view messages",
-            time: new Date(room.created_at).toLocaleDateString(),
-          };
-        })
-      );
     };
 
     fetchChats();
   }, [currentUser]);
 
-  // Fetch messages when selecting a chat
+  // ✅ Mark messages as seen
+  useEffect(() => {
+    if (!selectedChatId || !currentUser) return;
+
+    const markSeen = async () => {
+      await supabase
+        .from("chat_messages")
+        .update({
+          seen: true,
+          seen_at: new Date().toISOString(),
+        })
+        .eq("room_id", selectedChatId)
+        .neq("sender_id", currentUser.id);
+    };
+
+    markSeen();
+  }, [selectedChatId, currentUser]);
+
+  // ✅ Fetch + subscribe messages
   useEffect(() => {
     if (!selectedChatId) return;
 
@@ -109,14 +213,14 @@ export default function InboxPage() {
       setLoadingMessages(true);
       const { data, error } = await supabase
         .from("chat_messages")
-        .select("id, sender_id, message, created_at")
-        .eq("chat_room_id", selectedChatId)
+        .select("id, sender_id, message, created_at, seen, seen_at")
+        .eq("room_id", selectedChatId)
         .order("created_at", { ascending: true });
 
       setLoadingMessages(false);
 
       if (error) {
-        console.error("❌ Error fetching messages:", error);
+        console.error("❌ Error fetching messages:", error.message);
         return;
       }
 
@@ -125,22 +229,34 @@ export default function InboxPage() {
 
     fetchMessages();
 
-    // ✅ subscribe to new messages in this room
+    // Live subscription for new + updated messages
     const channel = supabase
       .channel(`chat-${selectedChatId}`)
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "chat_messages",
-          filter: `chat_room_id=eq.${selectedChatId}`,
+          filter: `room_id=eq.${selectedChatId}`,
         },
         (payload) => {
-          setMessages((prev) => ({
-            ...prev,
-            [selectedChatId]: [...(prev[selectedChatId] || []), payload.new],
-          }));
+          if (payload.eventType === "INSERT") {
+            setMessages((prev) => ({
+              ...prev,
+              [selectedChatId]: [
+                ...(prev[selectedChatId] || []),
+                payload.new as ChatMessage,
+              ],
+            }));
+          } else if (payload.eventType === "UPDATE") {
+            setMessages((prev) => ({
+              ...prev,
+              [selectedChatId]: (prev[selectedChatId] || []).map((m) =>
+                m.id === payload.new.id ? (payload.new as ChatMessage) : m
+              ),
+            }));
+          }
         }
       )
       .subscribe();
@@ -150,13 +266,86 @@ export default function InboxPage() {
     };
   }, [selectedChatId]);
 
+  // ✅ Typing subscription
+  useEffect(() => {
+    if (!selectedChatId) return;
+
+    const channel = supabase
+      .channel(`typing-${selectedChatId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "chat_typing",
+          filter: `room_id=eq.${selectedChatId}`,
+        },
+        (payload) => {
+          setTypingStatus(payload.new as TypingStatus);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedChatId]);
+
+  // ✅ Send message
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedChatId || !currentUser) return;
+
+    const text = newMessage.trim();
+
+    // Optimistic UI update
+    const optimisticMessage: ChatMessage = {
+      id: `temp-${Date.now()}`,
+      sender_id: currentUser.id,
+      message: text,
+      created_at: new Date().toISOString(),
+      seen: false,
+      seen_at: null,
+    };
+    setMessages((prev) => ({
+      ...prev,
+      [selectedChatId]: [...(prev[selectedChatId] || []), optimisticMessage],
+    }));
+    setNewMessage("");
+
+    const { error } = await supabase.from("chat_messages").insert([
+      {
+        room_id: selectedChatId,
+        sender_id: currentUser.id,
+        message: text,
+      },
+    ]);
+
+    if (error) {
+      console.error("❌ Error sending message:", error.message);
+    }
+  };
+
+  // ✅ Update typing state
+  const handleTyping = async (isTyping: boolean) => {
+    if (!selectedChatId || !currentUser) return;
+    await supabase.from("chat_typing").upsert(
+      {
+        room_id: selectedChatId,
+        user_id: currentUser.id,
+        is_typing: isTyping,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "room_id,user_id" }
+    );
+  };
+
   const filteredChats = chats.filter((chat) =>
     chat.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <div className="flex h-full w-full">
-      {/* Sidebar (Chats/Calls List) */}
+      {/* Sidebar */}
       <div className="bg-white flex-shrink-0 w-[280px] rounded-lg shadow-sm flex flex-col">
         {/* Search */}
         <div className="p-4">
@@ -178,9 +367,8 @@ export default function InboxPage() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab as "Chats" | "Calls")}
-              className={`w-1/2 pb-2 text-[15px] font-bold transition-colors ${
-                activeTab === tab ? "text-gray-700" : "text-gray-500"
-              }`}
+              className={`w-1/2 pb-2 text-[15px] font-bold transition-colors ${activeTab === tab ? "text-gray-700" : "text-gray-500"
+                }`}
             >
               {tab}
             </button>
@@ -198,9 +386,8 @@ export default function InboxPage() {
               <div
                 key={chat.id}
                 onClick={() => setSelectedChatId(chat.id)}
-                className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-100 transition ${
-                  selectedChatId === chat.id ? "bg-gray-200" : ""
-                }`}
+                className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-100 transition ${selectedChatId === chat.id ? "bg-gray-200" : ""
+                  }`}
               >
                 <img
                   src={chat.img}
@@ -237,7 +424,10 @@ export default function InboxPage() {
                     </div>
                     <div className="flex items-center text-xs text-gray-500 gap-1 mt-0.5">
                       {call.type === "missed" ? (
-                        <CallMissedIcon className="text-red-500" fontSize="small" />
+                        <CallMissedIcon
+                          className="text-red-500"
+                          fontSize="small"
+                        />
                       ) : (
                         <CallReceivedIcon
                           className="text-green-500"
@@ -248,7 +438,10 @@ export default function InboxPage() {
                     </div>
                   </div>
                 </div>
-                <VideocamOutlinedIcon className="text-gray-400" fontSize="small" />
+                <VideocamOutlinedIcon
+                  className="text-gray-400"
+                  fontSize="small"
+                />
               </div>
             ))}
         </div>
@@ -258,7 +451,7 @@ export default function InboxPage() {
       <div className="flex-1 bg-white rounded-lg shadow-sm flex flex-col">
         {selectedChat ? (
           <>
-            {/* Chat Header */}
+            {/* Header */}
             <div className="flex items-center justify-between border-b border-gray-300 px-4 py-3">
               <div className="flex items-center gap-3">
                 <img
@@ -266,8 +459,15 @@ export default function InboxPage() {
                   alt={selectedChat.name}
                   className="w-10 h-10 rounded-full object-cover"
                 />
-                <div className="text-gray-900 font-semibold text-sm">
-                  {selectedChat.name}
+                <div>
+                  <div className="text-gray-900 font-semibold text-sm">
+                    {selectedChat.name}
+                  </div>
+                  {typingStatus &&
+                    typingStatus.is_typing &&
+                    typingStatus.user_id !== currentUser?.id && (
+                      <div className="text-xs text-gray-500">typing...</div>
+                    )}
                 </div>
               </div>
               <div className="flex items-center gap-3 text-[#E46B64]">
@@ -283,37 +483,41 @@ export default function InboxPage() {
               ) : (
                 (messages[selectedChat.id] || []).map((msg) => {
                   const isFromMe = msg.sender_id === currentUser?.id;
-                  const alignment = isFromMe ? "justify-end" : "justify-start";
-                  const dotSide = isFromMe ? "left" : "right";
                   const bubbleColor = isFromMe
                     ? "bg-[#E46B64] text-white"
                     : "bg-gray-100 text-gray-800";
-                  const time = new Date(msg.created_at).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
+                  const time = new Date(msg.created_at).toLocaleTimeString(
+                    [],
+                    { hour: "2-digit", minute: "2-digit" }
+                  );
 
                   return (
-                    <div key={msg.id}>
-                      <div className={`group flex items-start ${alignment}`}>
-                        {dotSide === "left" && <MessageMenu />}
-                        <div className="flex flex-col items-end">
-                          <div
-                            className={`px-4 py-2 rounded-xl max-w-xs break-words ${bubbleColor}`}
-                          >
-                            {msg.message}
-                          </div>
-                          {isFromMe && (
-                            <div className="flex items-center gap-1 mt-1 text-[9px] text-gray-400">
-                              <DoneAllIcon
-                                style={{ color: "#E46B64" }}
-                                fontSize="small"
-                              />
-                              <span className="text-gray-900">Seen {time}</span>
-                            </div>
-                          )}
+                    <div
+                      key={msg.id}
+                      className={`flex ${isFromMe ? "justify-end" : "justify-start"
+                        }`}
+                    >
+                      <div className="flex flex-col items-end max-w-xs">
+                        <div
+                          className={`px-4 py-2 rounded-xl break-words ${bubbleColor}`}
+                        >
+                          {msg.message}
                         </div>
-                        {dotSide === "right" && <MessageMenu right />}
+                        {isFromMe && msg.seen && msg.seen_at && (
+                          <div className="flex items-center gap-1 mt-1 text-[9px] text-gray-400">
+                            <DoneAllIcon
+                              style={{ color: "#E46B64" }}
+                              fontSize="small"
+                            />
+                            <span className="text-gray-900">
+                              Seen{" "}
+                              {new Date(msg.seen_at).toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -331,8 +535,26 @@ export default function InboxPage() {
               <input
                 type="text"
                 placeholder="Type a message"
+                value={newMessage}
+                onChange={(e) => {
+                  setNewMessage(e.target.value);
+                  handleTyping(true);
+                }}
+                onBlur={() => handleTyping(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSendMessage();
+                    handleTyping(false);
+                  }
+                }}
                 className="flex-1 px-3 py-2 text-sm border rounded-full border-gray-300 outline-none"
               />
+              <button
+                onClick={handleSendMessage}
+                className="bg-[#E46B64] text-white px-4 py-2 rounded-full"
+              >
+                Send
+              </button>
             </div>
           </>
         ) : (
@@ -340,30 +562,6 @@ export default function InboxPage() {
             Select a chat to start messaging
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function MessageMenu({ right = false }: { right?: boolean }) {
-  return (
-    <div
-      className={`relative ${right ? "ml-2" : "mr-2"} opacity-0 group-hover:opacity-100 transition-opacity duration-200`}
-    >
-      <MoreHorizOutlinedIcon className="text-gray-400 cursor-pointer" />
-      <div
-        className={`absolute top-full ${
-          right ? "right-0" : "left-0"
-        } mt-1 bg-white shadow-md rounded-md text-sm z-10 hidden group-hover:block`}
-      >
-        {["Report", "Remove", "Reply"].map((action, i) => (
-          <button
-            key={i}
-            className="block px-4 py-2 w-full text-left hover:bg-gray-100"
-          >
-            {action}
-          </button>
-        ))}
       </div>
     </div>
   );
