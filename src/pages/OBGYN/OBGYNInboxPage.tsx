@@ -48,6 +48,7 @@ type ChatPreview = {
   img: string;
   message: string;
   time: string;
+  hasUnseen: boolean;
 };
 
 type TypingStatus = {
@@ -141,13 +142,10 @@ export default function InboxPage() {
 
         if (error) throw error;
 
-
         const formattedChats: ChatPreview[] =
           (data as unknown as ChatRoom[])?.map((room) => {
             const isObgyn = room.obgyn?.id === currentUser.id;
-            const other = isObgyn
-              ? (room.patient as ChatUser | null)
-              : (room.obgyn as ChatUser | null);
+            const other = isObgyn ? room.patient : room.obgyn;
 
             const latestMsg = room.chat_messages?.length
               ? [...room.chat_messages].sort(
@@ -156,6 +154,12 @@ export default function InboxPage() {
                   new Date(a.created_at).getTime()
               )[0]
               : null;
+
+            const hasUnseen =
+              latestMsg &&
+              latestMsg.sender_id !== currentUser.id &&
+              !latestMsg.seen_at
+
 
             return {
               id: room.id,
@@ -175,6 +179,7 @@ export default function InboxPage() {
                   minute: "2-digit",
                 })
                 : "",
+              hasUnseen: Boolean(hasUnseen),
             };
           }) || [];
 
@@ -192,14 +197,31 @@ export default function InboxPage() {
     if (!selectedChatId || !currentUser) return;
 
     const markSeen = async () => {
-      await supabase
+      const { data, error } = await supabase
         .from("chat_messages")
         .update({
           seen: true,
           seen_at: new Date().toISOString(),
         })
         .eq("room_id", selectedChatId)
-        .neq("sender_id", currentUser.id);
+        .neq("sender_id", currentUser.id)
+        .select(); // ✅ RETURN updated rows
+
+      if (error) {
+        console.error("❌ Error marking seen:", error.message);
+        return;
+      }
+
+      if (data?.length) {
+        // ✅ merge updates into messages state
+        setMessages((prev) => ({
+          ...prev,
+          [selectedChatId]: (prev[selectedChatId] || []).map((m) => {
+            const updated = data.find((d) => d.id === m.id);
+            return updated ? { ...m, ...updated } : m;
+          }),
+        }));
+      }
     };
 
     markSeen();
@@ -229,7 +251,7 @@ export default function InboxPage() {
 
     fetchMessages();
 
-    // Live subscription for new + updated messages
+    // Live subscription
     const channel = supabase
       .channel(`chat-${selectedChatId}`)
       .on(
@@ -257,6 +279,7 @@ export default function InboxPage() {
               ),
             }));
           }
+
         }
       )
       .subscribe();
@@ -297,7 +320,6 @@ export default function InboxPage() {
 
     const text = newMessage.trim();
 
-    // Optimistic UI update
     const optimisticMessage: ChatMessage = {
       id: `temp-${Date.now()}`,
       sender_id: currentUser.id,
@@ -338,6 +360,9 @@ export default function InboxPage() {
       { onConflict: "room_id,user_id" }
     );
   };
+
+
+
 
   const filteredChats = chats.filter((chat) =>
     chat.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -386,7 +411,11 @@ export default function InboxPage() {
               <div
                 key={chat.id}
                 onClick={() => setSelectedChatId(chat.id)}
-                className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-100 transition ${selectedChatId === chat.id ? "bg-gray-200" : ""
+                className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-100 transition ${selectedChatId === chat.id
+                  ? "bg-gray-200"
+                  : chat.hasUnseen
+                    ? "bg-blue-50"
+                    : ""
                   }`}
               >
                 <img
@@ -398,7 +427,10 @@ export default function InboxPage() {
                   <div className="text-sm font-semibold text-gray-800">
                     {chat.name}
                   </div>
-                  <div className="text-xs text-gray-500 truncate">
+                  <div
+                    className={`text-xs truncate ${chat.hasUnseen ? "text-blue-600 font-semibold" : "text-gray-500"
+                      }`}
+                  >
                     {chat.message}
                   </div>
                 </div>
@@ -465,9 +497,23 @@ export default function InboxPage() {
                   </div>
                   {typingStatus &&
                     typingStatus.is_typing &&
-                    typingStatus.user_id !== currentUser?.id && (
-                      <div className="text-xs text-gray-500">typing...</div>
-                    )}
+                    typingStatus.user_id !== currentUser?.id ? (
+                    <div className="text-xs text-blue-500 animate-pulse">
+                      typing...
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-500">
+                      Last active{" "}
+                      {typingStatus?.updated_at
+                        ? new Date(
+                          typingStatus.updated_at
+                        ).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                        : "recently"}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-3 text-[#E46B64]">
@@ -481,77 +527,100 @@ export default function InboxPage() {
               {loadingMessages ? (
                 <div className="text-gray-400 text-sm">Loading messages...</div>
               ) : (
-                (messages[selectedChat.id] || []).map((msg) => {
+                (messages[selectedChat.id] || []).map((msg, idx, arr) => {
                   const isFromMe = msg.sender_id === currentUser?.id;
                   const bubbleColor = isFromMe
                     ? "bg-[#E46B64] text-white"
                     : "bg-gray-100 text-gray-800";
-                  const time = new Date(msg.created_at).toLocaleTimeString(
-                    [],
-                    { hour: "2-digit", minute: "2-digit" }
-                  );
+                  const time = new Date(msg.created_at).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                  const lastFromMe = [...arr].filter(m => m.sender_id === currentUser?.id).pop();
+                  const chatMessages = messages[selectedChat.id] || [];
+                  const lastMessage = chatMessages[chatMessages.length - 1];
+
 
                   return (
                     <div
                       key={msg.id}
-                      className={`flex ${isFromMe ? "justify-end" : "justify-start"
-                        }`}
+                      className={`flex ${isFromMe ? "justify-end" : "justify-start"} items-start gap-3`}
                     >
-                      <div className="flex flex-col items-end max-w-xs">
+                      {!isFromMe && (
+                        <img
+                          src={selectedChat.img}
+                          alt="profile"
+                          className="w-8 h-8 rounded-full object-cover mt-1"
+                        />
+                      )}
+                      <div className="flex flex-col max-w-xs">
                         <div
-                          className={`px-4 py-2 rounded-xl break-words ${bubbleColor}`}
+                          className={`px-4 py-2 rounded-xl break-words shadow-sm ${bubbleColor} animate-fadeIn`}
                         >
                           {msg.message}
                         </div>
-                        {isFromMe && msg.seen && msg.seen_at && (
-                          <div className="flex items-center gap-1 mt-1 text-[9px] text-gray-400">
-                            <DoneAllIcon
-                              style={{ color: "#E46B64" }}
-                              fontSize="small"
-                            />
-                            <span className="text-gray-900">
-                              Seen{" "}
-                              {new Date(msg.seen_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
+
+                  
+
+                        {isFromMe && msg.id === lastFromMe?.id && msg.id === lastMessage?.id && (
+                          <div className="flex items-center gap-1 mt-1 text-[9px] text-gray-400 self-end">
+                            {msg.id.startsWith("temp-") && (
+                              <>
+                                <DoneAllIcon fontSize="small" className="text-gray-300" />
+                                <span>Sending...</span>
+                              </>
+                            )}
+
+                            {!msg.id.startsWith("temp-") && !msg.seen_at && (
+                              <>
+                                <DoneAllIcon fontSize="small" className="text-gray-400" />
+                                <span>Delivered</span>
+                              </>
+                            )}
+
+                            {msg.seen_at && (
+                              <>
+                                <DoneAllIcon style={{ color: "#E46B64" }} fontSize="small" />
+                                <span className="text-gray-900">
+                                  Seen{" "}
+                                  {new Date(msg.seen_at).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </>
+                            )}
                           </div>
                         )}
+
                       </div>
                     </div>
                   );
+
                 })
               )}
             </div>
 
             {/* Input */}
-            <div className="flex items-center gap-3 border-t border-gray-300 px-4 py-3">
-              {[AttachFileOutlinedIcon, InsertPhotoOutlinedIcon, CameraAltOutlinedIcon].map(
-                (Icon, idx) => (
-                  <Icon key={idx} className="text-[#E46B64] cursor-pointer" />
-                )
-              )}
+            <div className="border-t border-gray-300 px-4 py-3 flex items-center gap-3">
+              <AttachFileOutlinedIcon className="text-gray-400 cursor-pointer" />
+              <CameraAltOutlinedIcon className="text-gray-400 cursor-pointer" />
+              <InsertPhotoOutlinedIcon className="text-gray-400 cursor-pointer" />
               <input
                 type="text"
-                placeholder="Type a message"
+                placeholder="Type a message..."
                 value={newMessage}
                 onChange={(e) => {
                   setNewMessage(e.target.value);
                   handleTyping(true);
                 }}
                 onBlur={() => handleTyping(false)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleSendMessage();
-                    handleTyping(false);
-                  }
-                }}
-                className="flex-1 px-3 py-2 text-sm border rounded-full border-gray-300 outline-none"
+                onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                className="flex-1 border rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#E46B64]"
               />
               <button
                 onClick={handleSendMessage}
-                className="bg-[#E46B64] text-white px-4 py-2 rounded-full"
+                className="bg-[#E46B64] text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-[#d55a54] transition"
               >
                 Send
               </button>
