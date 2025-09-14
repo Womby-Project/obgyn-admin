@@ -32,6 +32,8 @@ type ChatMessage = {
   created_at: string;
   seen?: boolean;
   seen_at?: string | null;
+  message_type?: "text" | "image" | "file";
+  file_url?: string | null; // ✅ add support for attachments
 };
 
 type ChatRoom = {
@@ -91,7 +93,7 @@ export default function InboxPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [typingStatus, setTypingStatus] = useState<TypingStatus | null>(null);
-
+  const fileInputRef = useState<HTMLInputElement | null>(null);
   const calls = dummyCalls.filter((call) =>
     call.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -235,9 +237,10 @@ export default function InboxPage() {
       setLoadingMessages(true);
       const { data, error } = await supabase
         .from("chat_messages")
-        .select("id, sender_id, message, created_at, seen, seen_at")
+        .select("id, sender_id, message, created_at, seen, seen_at, message_type, file_url") // ✅ include these
         .eq("room_id", selectedChatId)
         .order("created_at", { ascending: true });
+
 
       setLoadingMessages(false);
 
@@ -315,6 +318,7 @@ export default function InboxPage() {
   }, [selectedChatId]);
 
   // ✅ Send message
+  // ✅ Send message (text only)
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChatId || !currentUser) return;
 
@@ -327,6 +331,7 @@ export default function InboxPage() {
       created_at: new Date().toISOString(),
       seen: false,
       seen_at: null,
+      message_type: "text",
     };
     setMessages((prev) => ({
       ...prev,
@@ -339,6 +344,7 @@ export default function InboxPage() {
         room_id: selectedChatId,
         sender_id: currentUser.id,
         message: text,
+        message_type: "text",
       },
     ]);
 
@@ -360,6 +366,47 @@ export default function InboxPage() {
       { onConflict: "room_id,user_id" }
     );
   };
+
+
+  // ✅ File upload handler
+  const handleUpload = async (file: File, type: "image" | "file") => {
+    if (!file || !selectedChatId || !currentUser) return;
+
+    const fileExt = file.name.split(".").pop();
+    const filePath = `${selectedChatId}/${Date.now()}.${fileExt}`;
+
+    // Upload to Supabase storage (make sure you have a `chat-attachments` bucket)
+    const { error: uploadError } = await supabase.storage
+      .from("chat_attachments")
+      .upload(filePath, file);
+
+    if (uploadError) {
+      console.error("❌ File upload error:", uploadError.message);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("chat_attachments")
+      .getPublicUrl(filePath);
+
+    const publicUrl = urlData.publicUrl;
+
+    // Insert as a chat message
+    const { error: insertError } = await supabase.from("chat_messages").insert([
+      {
+        room_id: selectedChatId,
+        sender_id: currentUser.id,
+        message: type === "file" ? file.name : "",
+        message_type: type,
+        file_url: publicUrl,
+      },
+    ]);
+
+    if (insertError) {
+      console.error("❌ Error sending file message:", insertError.message);
+    }
+  };
+
 
 
 
@@ -557,41 +604,65 @@ export default function InboxPage() {
                         <div
                           className={`px-4 py-2 rounded-xl break-words shadow-sm ${bubbleColor} animate-fadeIn`}
                         >
-                          {msg.message}
+                          {msg.message_type !== "text" && msg.file_url ? (
+                            msg.file_url.match(/\.(jpeg|jpg|png|gif|webp)$/i) ? (
+                              <img
+                                src={msg.file_url ?? undefined}
+                                alt="uploaded"
+                                className="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
+                                onClick={() => msg.file_url && window.open(msg.file_url, "_blank")}
+                              />
+                            ) : (
+                              <a
+                                href={msg.file_url ?? undefined}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 text-sm hover:underline"
+                              >
+                                📄 <span className="truncate max-w-[150px]">{msg.message || "File"}</span>
+                              </a>
+                            )
+                          ) : (
+                            <p>{msg.message}</p>
+                          )}
+
                         </div>
 
-                  
 
-                        {isFromMe && msg.id === lastFromMe?.id && msg.id === lastMessage?.id && (
-                          <div className="flex items-center gap-1 mt-1 text-[9px] text-gray-400 self-end">
-                            {msg.id.startsWith("temp-") && (
-                              <>
-                                <DoneAllIcon fontSize="small" className="text-gray-300" />
-                                <span>Sending...</span>
-                              </>
-                            )}
 
-                            {!msg.id.startsWith("temp-") && !msg.seen_at && (
-                              <>
-                                <DoneAllIcon fontSize="small" className="text-gray-400" />
-                                <span>Delivered</span>
-                              </>
-                            )}
 
-                            {msg.seen_at && (
-                              <>
-                                <DoneAllIcon style={{ color: "#E46B64" }} fontSize="small" />
-                                <span className="text-gray-900">
-                                  Seen{" "}
-                                  {new Date(msg.seen_at).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        )}
+                        {
+                          isFromMe && msg.id === lastFromMe?.id && msg.id === lastMessage?.id && (
+                            <div className="flex items-center gap-1 mt-1 text-[9px] text-gray-400 self-end">
+                              {msg.id.startsWith("temp-") && (
+                                <>
+                                  <DoneAllIcon fontSize="small" className="text-gray-300" />
+                                  <span>Sending...</span>
+                                </>
+                              )}
+
+                              {!msg.id.startsWith("temp-") && !msg.seen_at && (
+                                <>
+                                  <DoneAllIcon fontSize="small" className="text-gray-400" />
+                                  <span>Delivered</span>
+                                </>
+                              )}
+
+                              {msg.seen_at && (
+                                <>
+                                  <DoneAllIcon style={{ color: "#E46B64" }} fontSize="small" />
+                                  <span className="text-gray-900">
+                                    Seen{" "}
+                                    {new Date(msg.seen_at).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )
+                        }
 
                       </div>
                     </div>
@@ -603,9 +674,25 @@ export default function InboxPage() {
 
             {/* Input */}
             <div className="border-t border-gray-300 px-4 py-3 flex items-center gap-3">
-              <AttachFileOutlinedIcon className="text-gray-400 cursor-pointer" />
-              <CameraAltOutlinedIcon className="text-gray-400 cursor-pointer" />
-              <InsertPhotoOutlinedIcon className="text-gray-400 cursor-pointer" />
+              {/* File upload buttons */}
+              <label className="cursor-pointer">
+                <AttachFileOutlinedIcon className="text-gray-400" />
+                <input
+                  type="file"
+                  hidden
+                  onChange={(e) => e.target.files && handleUpload(e.target.files[0], "file")}
+                />
+              </label>
+              <label className="cursor-pointer">
+                <InsertPhotoOutlinedIcon className="text-gray-400" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => e.target.files && handleUpload(e.target.files[0], "image")}
+                />
+              </label>
+
               <input
                 type="text"
                 placeholder="Type a message..."
@@ -625,13 +712,15 @@ export default function InboxPage() {
                 Send
               </button>
             </div>
+
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400">
             Select a chat to start messaging
           </div>
-        )}
-      </div>
-    </div>
+        )
+        }
+      </div >
+    </div >
   );
 }
