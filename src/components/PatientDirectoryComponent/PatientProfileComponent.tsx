@@ -249,7 +249,7 @@ export default function PatientProfileComponent() {
                                         </CardTitle>
                                         <Button
                                             className="text-[#E46B64] hover:bg-gray-100 cursor-pointer text-sm px-4 py-2"
-                                            onClick={() => navigate(`/patientdirectory/maternalinsight?id=${patient.id}`)}
+                                            onClick={() => navigate(`/patientdirectory/maternalinsight/${patient.id}`)}
                                         >
                                             View Maternal Insights &gt;
                                         </Button>

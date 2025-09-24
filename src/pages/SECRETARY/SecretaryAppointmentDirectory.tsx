@@ -93,62 +93,91 @@ export default function SecretaryAppointmentDirectory() {
     const [selectedAppointment, setSelectedAppointment] = useState<AppointmentUIRow | null>(null);
     const [actionValue, setActionValue] = useState("");
 
-    const fetchAppointments = async () => {
-        setLoading(true);
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-            console.error("Error fetching user:", userError?.message);
-            setLoading(false);
-            return;
-        }
+const fetchAppointments = async () => {
+  setLoading(true);
 
-        const { data: secUser, error: secError } = await supabase
-            .from("secretary_users")
-            .select("obgyn_id")
-            .eq("id", user.id)
-            .single();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    console.error("Error fetching user:", userError?.message);
+    setAppointments([]);
+    setLoading(false);
+    return;
+  }
 
-        if (secError || !secUser) {
-            console.warn("User is not a secretary or no obgyn_id found");
-            setAppointments([]);
-            setLoading(false);
-            return;
-        }
+  const { data: secUser, error: secError } = await supabase
+    .from("secretary_users")
+    .select("obgyn_id")
+    .eq("id", user.id)
+    .single();
 
-        const { data, error } = await supabase
-            .from("appointments")
-            .select(`
-    id,
-    appointment_datetime,
-    status,
-    appointment_type,
-    patient:patient_users (
+  if (secError || !secUser) {
+    console.warn("User is not a secretary or no obgyn_id found");
+    setAppointments([]);
+    setLoading(false);
+    return;
+  }
+
+  // fetch appointments + followups + patient (no complex foreignTable ordering/limits)
+  const { data, error } = await supabase
+    .from("appointments")
+    .select(`
       id,
-      first_name,
-      last_name,
-      pregnancy_weeks,
-      patient_type
-    ),
-    followups:appointment_followups (
-      id,
-      follow_up_datetime,
-      reason
-    )
-  `)
-            .eq("obgyn_id", secUser.obgyn_id)
-            .order("appointment_datetime", { ascending: false })
-            .order("follow_up_datetime", { foreignTable: "appointment_followups", ascending: false }) // 👈 order followups
-            .limit(1, { foreignTable: "appointment_followups" }); // 👈 only latest follow-up
+      appointment_datetime,
+      status,
+      appointment_type,
+      patient:patient_users (
+        id,
+        first_name,
+        last_name,
+        pregnancy_weeks,
+        patient_type
+      ),
+      followups:appointment_followups (
+        id,
+        follow_up_datetime,
+        reason
+      )
+    `)
+    .eq("obgyn_id", secUser.obgyn_id)
+    .order("appointment_datetime", { ascending: true }); // sort by datetime as a base
 
+  if (error) {
+    console.error("❌ Error fetching appointments:", error.message);
+    setAppointments([]);
+    setLoading(false);
+    return;
+  }
 
-        if (error) {
-            console.error("❌ Error fetching appointments:", error.message);
-        } else {
-            console.log("✅ Appointments fetched:", data);
-            setAppointments(data as unknown as AppointmentRow[]);
-        }
-        setLoading(false);
-    };
+  // normalize: ensure followups sorted descending by follow_up_datetime (latest first)
+  const normalized = (data ?? []).map((appt: any) => {
+    const followups = (appt.followups ?? []).slice().sort((a: any, b: any) => {
+      return new Date(b.follow_up_datetime).getTime() - new Date(a.follow_up_datetime).getTime();
+    });
+    return { ...appt, followups };
+  });
+
+  // status priority: Pending must appear first
+  const statusPriority: Record<string, number> = {
+    pending: 0,
+    accepted: 1,
+    "rescheduled": 2,
+    "follow-up": 3,
+    done: 4,
+    declined: 5,
+  };
+
+  // sort normalized appointments by status priority, then by appointment_datetime
+  normalized.sort((a: any, b: any) => {
+    const sa = statusPriority[(a.status ?? "").toLowerCase()] ?? 99;
+    const sb = statusPriority[(b.status ?? "").toLowerCase()] ?? 99;
+    if (sa !== sb) return sa - sb;
+    return new Date(a.appointment_datetime).getTime() - new Date(b.appointment_datetime).getTime();
+  });
+
+  setAppointments(normalized as AppointmentRow[]);
+  setLoading(false);
+};
+
 
     useEffect(() => {
         fetchAppointments();
@@ -159,7 +188,7 @@ export default function SecretaryAppointmentDirectory() {
                 "postgres_changes",
                 { event: "INSERT", schema: "public", table: "appointment_followups" },
                 (payload) => {
-                    console.log("🔔 New follow-up created:", payload.new);
+                    console.log("New follow-up created:", payload.new);
                     fetchAppointments(); // refresh secretary’s list
                 }
             )
@@ -167,7 +196,7 @@ export default function SecretaryAppointmentDirectory() {
                 "postgres_changes",
                 { event: "UPDATE", schema: "public", table: "appointments" },
                 (payload) => {
-                    console.log("🔔 Appointment updated:", payload.new);
+                    console.log("Appointment updated:", payload.new);
                     fetchAppointments(); // refresh secretary’s list
                 }
             )

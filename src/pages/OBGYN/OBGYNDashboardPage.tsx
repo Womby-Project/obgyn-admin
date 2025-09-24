@@ -57,9 +57,9 @@ export default function Dashboard() {
       <div className="flex gap-9 mt-2 items-start">
         {/* Left Column */}
         <div className="flex-1">
-          <div className="grid grid-cols-3 gap-10 ">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Total Patients */}
-            <div className="w-[250px] bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
+            <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-gray-500 font-semibold text-[15px]">Total Number of Patients</h3>
                 <div className="bg-[#7C3AED1A] p-2 rounded-md">
@@ -70,7 +70,7 @@ export default function Dashboard() {
             </div>
 
             {/* Upcoming Appointments */}
-            <div className="w-[250px] bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
+            <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-gray-500 font-semibold text-[15px]">Upcoming Appointments</h3>
                 <div className="bg-[#06B6D41A] p-2 rounded-md">
@@ -81,9 +81,11 @@ export default function Dashboard() {
             </div>
 
             {/* Unread Messages */}
-            <div className="w-[250px] bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
+            <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-gray-500 font-semibold text-[15px]">Unread <br /> Messages</h3>
+                <h3 className="text-gray-500 font-semibold text-[15px]">
+                  Unread <br /> Messages
+                </h3>
                 <div className="bg-[#DC26261A] p-2 rounded-md">
                   <EmailIcon style={{ color: '#DC2626', fontSize: 30 }} />
                 </div>
@@ -91,6 +93,7 @@ export default function Dashboard() {
               <p className="text-gray-800 text-xl font-bold">{unreadMessages}</p>
             </div>
           </div>
+
 
           <div className="mt-6 ">
             <ScheduleCompoment />

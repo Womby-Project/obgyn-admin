@@ -1,19 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import SearchIcon from "@mui/icons-material/Search";
 import rebeca from "@/assets/rebeca.png";
-import lim from "@/assets/lim.png";
-
 import CallReceivedIcon from "@mui/icons-material/CallReceived";
 import CallMissedIcon from "@mui/icons-material/CallMissed";
 import VideocamOutlinedIcon from "@mui/icons-material/VideocamOutlined";
 import MoreHorizOutlinedIcon from "@mui/icons-material/MoreHorizOutlined";
 import AttachFileOutlinedIcon from "@mui/icons-material/AttachFileOutlined";
-import CameraAltOutlinedIcon from "@mui/icons-material/CameraAltOutlined";
 import InsertPhotoOutlinedIcon from "@mui/icons-material/InsertPhotoOutlined";
-import DoneAllIcon from "@mui/icons-material/DoneAll";
-
+import VideoCall from "@/components/modals/videoCall";
 import { supabase } from "@/lib/supabaseClient";
 import type { User } from "@supabase/supabase-js";
+
+import { useParams, useLocation } from "react-router-dom";
 
 // ------------------ TYPES ------------------
 
@@ -26,13 +24,15 @@ type ChatUser = {
 };
 
 type ChatMessage = {
+  status: string;
   id: string;
   sender_id: string;
   message: string;
+  room_id: string;
   created_at: string;
   seen?: boolean;
   seen_at?: string | null;
-  message_type?: "text" | "image" | "file";
+  message_type?: "text" | "image" | "file" | "call";
   file_url?: string | null; // ✅ add support for attachments
 };
 
@@ -51,6 +51,7 @@ type ChatPreview = {
   message: string;
   time: string;
   hasUnseen: boolean;
+  participants: string[]
 };
 
 type TypingStatus = {
@@ -59,26 +60,17 @@ type TypingStatus = {
   updated_at: string;
 };
 
+type UserProfile = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  avatar_url: string;
+};
+
 // ------------------ DUMMY CALLS ------------------
 
-const dummyCalls = [
-  {
-    id: 1,
-    name: "Rebeca Lim",
-    img: lim,
-    type: "missed",
-    video: false,
-    time: "Today, 3:10 PM",
-  },
-  {
-    id: 2,
-    name: "Emma Wilson",
-    img: rebeca,
-    type: "received",
-    video: true,
-    time: "Today, 1:55 PM",
-  },
-];
+
+
 
 // ------------------ COMPONENT ------------------
 
@@ -86,18 +78,20 @@ export default function InboxPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"Chats" | "Calls">("Chats");
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
-
+  const { patientId } = useParams<{ patientId?: string }>();
+  const location = useLocation();
   const [chats, setChats] = useState<ChatPreview[]>([]);
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [typingStatus, setTypingStatus] = useState<TypingStatus | null>(null);
-  const fileInputRef = useState<HTMLInputElement | null>(null);
-  const calls = dummyCalls.filter((call) =>
-    call.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
   const selectedChat = chats.find((c) => c.id === selectedChatId);
+  const [calls, setCalls] = useState<any[]>([]);
+  const [isCalling, setIsCalling] = useState(false);
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
 
   // ✅ Get logged-in user
   useEffect(() => {
@@ -112,9 +106,166 @@ export default function InboxPage() {
     fetchUser();
   }, []);
 
+  const autoCall = location.state?.autoCall;
+
+  useEffect(() => {
+    if (!patientId || !currentUser || chats.length === 0) return;
+
+    // Find the chat where this patient is a participant
+    const targetChat = chats.find((c) => c.participants.includes(patientId));
+
+    if (targetChat) {
+      setSelectedChatId(targetChat.id);
+
+      // ✅ Auto open call if flag is set
+      // ✅ Auto open call if flag is set
+      if (autoCall) {
+        handleStartCall(targetChat.id); // 🔥 use the same popup logic
+      }
+
+    }
+  }, [patientId, chats, autoCall, currentUser]);
+
+
+  const handleStartCall = async (chatId: string) => {
+    if (!currentUser) return;
+
+    const chat = chats.find((c) => c.id === chatId);
+    if (!chat) return;
+
+    const calleeId = chat.participants.find((p) => p !== currentUser.id);
+    if (!calleeId) return;
+
+    try {
+      // Insert call record
+      const { data: callData, error: callError } = await supabase
+        .from("chat_calls")
+        .insert([
+          {
+            room_id: chatId,
+            caller_id: currentUser.id,
+            callee_id: calleeId,
+            started_at: new Date(),
+            status: "ringing",
+          },
+        ])
+        .select();
+
+      if (callError) {
+        console.error("❌ Error creating call:", callError.message);
+        return;
+      }
+
+      console.log("📞 Outgoing call record created:", callData);
+
+      // Build popup URL with query params for names & avatars
+      const callerName = currentUser.user_metadata?.full_name || "You";
+      const calleeName = chat.name || "Other User";
+      const profileUrl = currentUser.user_metadata?.profile_picture_url || "";
+      const remoteProfileUrl = chat.img || "";
+
+      const url = `/video-call/${chatId}?callerName=${encodeURIComponent(
+        callerName
+      )}&calleeName=${encodeURIComponent(
+        calleeName
+      )}&profileUrl=${encodeURIComponent(
+        profileUrl
+      )}&remoteProfileUrl=${encodeURIComponent(remoteProfileUrl)}`;
+
+      // Open new popup window with video call
+      const popup = window.open(
+        url,
+        "VideoCallPopup",
+        "width=900,height=650,toolbar=no,menubar=no,location=no,status=no"
+      );
+
+      if (popup) popup.focus();
+    } catch (err) {
+      console.error("❌ Unexpected error in handleStartCall:", err);
+    }
+  };
+
+
+
+
+
+
+
   // ✅ Fetch chats
   useEffect(() => {
     if (!currentUser) return;
+
+
+    const fetchCalls = async () => {
+      if (!currentUser) return;
+
+      try {
+        // Step 1: Get all calls where the user is caller or callee
+        const { data: callData, error } = await supabase
+          .from("chat_calls")
+          .select("*")
+          .or(`caller_id.eq.${currentUser.id},callee_id.eq.${currentUser.id}`)
+          .order("started_at", { ascending: false });
+
+        if (error) throw error;
+        if (!callData) return;
+
+        // Step 2: Collect the other user IDs
+        const otherUserIds = [
+          ...new Set(
+            callData.map((c) =>
+              c.caller_id === currentUser.id ? c.callee_id : c.caller_id
+            )
+          ),
+        ];
+
+        // Step 3: Fetch patient profiles only
+        const { data: patientProfiles } = await supabase
+          .from("patient_users")
+          .select("id, first_name, last_name, profile_avatar_url")
+          .in("id", otherUserIds);
+
+        const profileMap: Record<
+          string,
+          { id: string; first_name: string; last_name: string; avatar: string }
+        > = {};
+
+        (patientProfiles || []).forEach((p) => {
+          profileMap[p.id] = {
+            ...p,
+            avatar: p.profile_avatar_url || "/default-avatar.png",
+          };
+        });
+
+        // Step 4: Attach profile info + formatted time to each call
+        const callsWithProfiles = callData.map((c) => {
+          const otherId =
+            c.caller_id === currentUser.id ? c.callee_id : c.caller_id;
+          const profile = profileMap[otherId];
+
+          return {
+            id: c.id,
+            roomId: c.room_id,
+            startedAt: c.started_at,
+            endedAt: c.ended_at,
+            name: profile
+              ? `${profile.first_name} ${profile.last_name}`
+              : "Unknown",
+            img: profile?.avatar || "/default-avatar.png",
+            type: c.ended_at ? "received" : "missed",
+            time: new Date(c.started_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          };
+        });
+
+        setCalls(callsWithProfiles);
+      } catch (err) {
+        console.error("Error fetching calls:", err);
+      }
+    };
+
 
     const fetchChats = async () => {
       try {
@@ -168,12 +319,7 @@ export default function InboxPage() {
               name: other
                 ? `${other.first_name ?? ""} ${other.last_name ?? ""}`.trim()
                 : "Unknown",
-              img:
-                other?.profile_avatar_url ||
-                (isObgyn
-                  ? room.obgyn?.profile_avatar_url
-                  : room.patient?.profile_avatar_url) ||
-                rebeca,
+              img: other?.profile_avatar_url || rebeca,
               message: latestMsg?.message || "No messages yet",
               time: latestMsg
                 ? new Date(latestMsg.created_at).toLocaleTimeString([], {
@@ -182,7 +328,12 @@ export default function InboxPage() {
                 })
                 : "",
               hasUnseen: Boolean(hasUnseen),
+              participants: [
+                room.patient?.id,
+                room.obgyn?.id,
+              ].filter(Boolean) as string[], // 👈 ensure no nulls
             };
+
           }) || [];
 
         setChats(formattedChats);
@@ -192,7 +343,68 @@ export default function InboxPage() {
     };
 
     fetchChats();
+    fetchCalls()
   }, [currentUser]);
+
+
+
+  const handleUnsendMessage = async (msgId: string, roomId: string) => {
+    try {
+      const { error, data } = await supabase
+        .from("chat_messages")
+        .update({ status: "unsent" })
+        .eq("id", msgId)
+        .select(); // ✅ return the updated row
+
+      if (error) throw error;
+
+      // Optimistically update local state
+      setMessages((prev) => ({
+        ...prev,
+        [roomId]: (prev[roomId] || []).map((m) =>
+          m.id === msgId ? { ...m, ...data[0] } : m
+        ),
+      }));
+    } catch (err) {
+      console.error("Error unsending message:", err);
+      alert("Failed to unsend message. You can only delete your own messages.");
+    }
+  };
+
+
+
+
+
+
+
+
+
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const channel = supabase
+      .channel("patient_calls")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "chat_calls", filter: `callee_id=eq.${currentUser.id}` },
+        (payload) => {
+          const call = payload.new;
+          console.log("Incoming call:", call);
+          setActiveRoomId(call.room_id);
+          setIsCalling(true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser]);
+
+
+
+
 
   // ✅ Mark messages as seen
   useEffect(() => {
@@ -237,7 +449,7 @@ export default function InboxPage() {
       setLoadingMessages(true);
       const { data, error } = await supabase
         .from("chat_messages")
-        .select("id, sender_id, message, created_at, seen, seen_at, message_type, file_url") // ✅ include these
+        .select("id, sender_id, room_id, message, created_at, seen, seen_at, message_type, file_url, status") // ✅ include these
         .eq("room_id", selectedChatId)
         .order("created_at", { ascending: true });
 
@@ -332,6 +544,8 @@ export default function InboxPage() {
       seen: false,
       seen_at: null,
       message_type: "text",
+      room_id: "",
+      status: ""
     };
     setMessages((prev) => ({
       ...prev,
@@ -518,9 +732,10 @@ export default function InboxPage() {
                   </div>
                 </div>
                 <VideocamOutlinedIcon
-                  className="text-gray-400"
-                  fontSize="small"
+
                 />
+
+
               </div>
             ))}
         </div>
@@ -564,13 +779,18 @@ export default function InboxPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3 text-[#E46B64]">
-                <VideocamOutlinedIcon />
+                <VideocamOutlinedIcon
+                  onClick={() => handleStartCall(selectedChat.id)}
+                  className="cursor-pointer"
+                />
+
+
                 <MoreHorizOutlinedIcon />
               </div>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-6">
               {loadingMessages ? (
                 <div className="text-gray-400 text-sm">Loading messages...</div>
               ) : (
@@ -579,98 +799,149 @@ export default function InboxPage() {
                   const bubbleColor = isFromMe
                     ? "bg-[#E46B64] text-white"
                     : "bg-gray-100 text-gray-800";
-                  const time = new Date(msg.created_at).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  });
-                  const lastFromMe = [...arr].filter(m => m.sender_id === currentUser?.id).pop();
-                  const chatMessages = messages[selectedChat.id] || [];
-                  const lastMessage = chatMessages[chatMessages.length - 1];
+                  const time = new Date(msg.created_at);
+                  const prev = idx > 0 ? new Date(arr[idx - 1].created_at) : null;
 
+                  // ⏱️ Insert a date/time separator if >30min gap or new day
+                  const showSeparator =
+                    !prev ||
+                    time.toDateString() !== prev.toDateString() ||
+                    (time.getTime() - prev.getTime()) / (1000 * 60) > 30;
+
+                  // 🎥 If message is call log type
+                  if (msg.message_type === "call") {
+                    return (
+                      <div key={msg.id} className="flex justify-center my-4">
+                        <div className="px-4 py-2 rounded-lg bg-gray-50 text-xs text-gray-600 border">
+                          {msg.message.includes("missed") ? (
+                            <span className="text-red-500">❌ Missed Call</span>
+                          ) : (
+                            <span className="text-green-600">📞 Video Call Ended</span>
+                          )}
+                          <div className="text-[10px] text-gray-400 mt-1">
+                            {time.toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
 
                   return (
-                    <div
-                      key={msg.id}
-                      className={`flex ${isFromMe ? "justify-end" : "justify-start"} items-start gap-3`}
-                    >
-                      {!isFromMe && (
-                        <img
-                          src={selectedChat.img}
-                          alt="profile"
-                          className="w-8 h-8 rounded-full object-cover mt-1"
-                        />
+                    <div key={msg.id}>
+                      {showSeparator && (
+                        <div className="flex justify-center my-2">
+                          <span className="text-[11px] text-gray-400 bg-white px-3 rounded-full shadow-sm">
+                            {time.toLocaleString()}
+                          </span>
+                        </div>
                       )}
-                      <div className="flex flex-col max-w-xs">
-                        <div
-                          className={`px-4 py-2 rounded-xl break-words shadow-sm ${bubbleColor} animate-fadeIn`}
-                        >
-                          {msg.message_type !== "text" && msg.file_url ? (
-                            msg.file_url.match(/\.(jpeg|jpg|png|gif|webp)$/i) ? (
-                              <img
-                                src={msg.file_url ?? undefined}
-                                alt="uploaded"
-                                className="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
-                                onClick={() => msg.file_url && window.open(msg.file_url, "_blank")}
-                              />
+
+                      <div
+                        className={`group flex ${isFromMe ? "justify-end" : "justify-start"
+                          } items-start gap-3`}
+                      >
+                        {/* Avatar only for other user */}
+                        {!isFromMe && (
+                          <img
+                            src={selectedChat.img}
+                            alt="profile"
+                            className="w-8 h-8 rounded-full object-cover mt-1"
+                          />
+                        )}
+
+                        <div className="flex flex-col max-w-xs relative">
+                          {/* Message bubble */}
+                          <div
+                            className={`px-4 py-2 rounded-2xl break-words shadow-sm animate-fadeIn relative ${bubbleColor}`}
+                          >
+                            {msg.status === "unsent" ? (
+                              <p className="italic text-gray-500 text-sm">
+                                {isFromMe
+                                  ? "You unsent a message"
+                                  : `${selectedChat.name || "User"} unsent a message`}
+                              </p>
+                            ) : msg.message_type !== "text" && msg.file_url ? (
+                              msg.file_url.match(/\.(jpeg|jpg|png|gif|webp)$/i) ? (
+                                <img
+                                  src={msg.file_url ?? undefined}
+                                  alt="uploaded"
+                                  className="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
+                                  onClick={() => msg.file_url && window.open(msg.file_url, "_blank")}
+                                />
+                              ) : (
+                                <a
+                                  href={msg.file_url ?? undefined}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-sm hover:underline"
+                                >
+                                  📄{" "}
+                                  <span className="truncate max-w-[150px]">
+                                    {msg.message || "File"}
+                                  </span>
+                                </a>
+                              )
                             ) : (
-                              <a
-                                href={msg.file_url ?? undefined}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 text-sm hover:underline"
-                              >
-                                📄 <span className="truncate max-w-[150px]">{msg.message || "File"}</span>
-                              </a>
-                            )
-                          ) : (
-                            <p>{msg.message}</p>
+                              <p>{msg.message}</p>
+                            )}
+                          </div>
+
+
+                          {msg.status === "active" && (
+                            <div
+                              className={`absolute top-1/2 -translate-y-1/2 ${isFromMe ? "right-full mr-1" : "left-full ml-1"
+                                } hidden group-hover:flex items-center`}
+                            >
+                              <div className="relative group/menu">
+                                <MoreHorizOutlinedIcon className="cursor-pointer text-gray-500 hover:text-[#E46B64]" />
+
+                                {/* Dropdown bubble */}
+                                <div
+                                  className={`absolute mt-2 w-36 rounded-2xl shadow-md border border-gray-100
+          bg-white/95 backdrop-blur-sm z-50
+          ${isFromMe ? "right-0 origin-top-right" : "left-0 origin-top-left"}
+          after:content-[''] after:absolute after:w-0 after:h-0 
+          after:border-8 after:border-transparent after:top-0
+          ${isFromMe
+                                      ? "after:right-4 after:border-b-white after:-translate-y-full"
+                                      : "after:left-4 after:border-b-white after:-translate-y-full"}
+          opacity-0 scale-95 pointer-events-none
+          group-hover/menu:opacity-100 group-hover/menu:scale-100 group-hover/menu:pointer-events-auto
+          transition-all duration-200 ease-out`}
+                                >
+                                  {isFromMe && (
+                                    <button
+                                      onClick={() => handleUnsendMessage(msg.id, selectedChat.id)}
+                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 
+    hover:bg-[#E46B64]/10 hover:text-[#E46B64] 
+    transition-colors rounded-t-2xl"
+                                    >
+                                      Unsend
+                                    </button>
+
+                                  )}
+                                  <button
+                                    onClick={() => console.log("report", msg.id)}
+                                    className={`w-full text-left px-4 py-2 text-sm text-gray-700 
+            hover:bg-[#E46B64]/10 hover:text-[#E46B64] 
+            transition-colors ${isFromMe ? "rounded-b-2xl" : "rounded-2xl"}`}
+                                  >
+                                    Report
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           )}
 
                         </div>
-
-
-
-
-                        {
-                          isFromMe && msg.id === lastFromMe?.id && msg.id === lastMessage?.id && (
-                            <div className="flex items-center gap-1 mt-1 text-[9px] text-gray-400 self-end">
-                              {msg.id.startsWith("temp-") && (
-                                <>
-                                  <DoneAllIcon fontSize="small" className="text-gray-300" />
-                                  <span>Sending...</span>
-                                </>
-                              )}
-
-                              {!msg.id.startsWith("temp-") && !msg.seen_at && (
-                                <>
-                                  <DoneAllIcon fontSize="small" className="text-gray-400" />
-                                  <span>Delivered</span>
-                                </>
-                              )}
-
-                              {msg.seen_at && (
-                                <>
-                                  <DoneAllIcon style={{ color: "#E46B64" }} fontSize="small" />
-                                  <span className="text-gray-900">
-                                    Seen{" "}
-                                    {new Date(msg.seen_at).toLocaleTimeString([], {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          )
-                        }
-
                       </div>
                     </div>
-                  );
 
+                  );
                 })
               )}
             </div>
+
 
             {/* Input */}
             <div className="border-t border-gray-300 px-4 py-3 flex items-center gap-3">
@@ -721,6 +992,30 @@ export default function InboxPage() {
         )
         }
       </div >
+
+      {isCalling && activeRoomId && (
+        <div className="fixed bottom-4 right-4 w-[400px] h-[300px] bg-white shadow-lg rounded-lg z-50 border rounded-2xl overflow-hidden">
+          {(() => {
+            const activeChat = chats.find((c) => c.id === activeRoomId);
+
+            return (
+              <VideoCall
+                roomId={activeRoomId}
+                onClose={() => setIsCalling(false)}
+                callerName={currentUser?.user_metadata?.full_name || "You"}   // ✅ your actual name
+                calleeName={activeChat?.name || "Unknown User"}              // ✅ other user’s name
+                profileUrl={currentUser?.user_metadata?.profile_picture_url} // ✅ your avatar
+                remoteProfileUrl={activeChat?.img}                           // ✅ other user’s avatar
+              />
+            );
+          })()}
+        </div>
+      )}
+
+
+
     </div >
+
+
   );
 }

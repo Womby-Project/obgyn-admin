@@ -1,4 +1,6 @@
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 import {
     Breadcrumb,
@@ -17,7 +19,6 @@ import {
 } from "@/components/ui/card";
 import InsertEmoticonIcon from '@mui/icons-material/InsertEmoticon';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
-import { dummyPatients } from "@/lib/dummyDataPatient";
 import DirectionsWalkOutlinedIcon from '@mui/icons-material/DirectionsWalkOutlined';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import { Badge, badgeVariants } from "@/components/ui/badge";
@@ -32,15 +33,127 @@ import {
 } from "@/components/ui/hover-card"
 import type { VariantProps } from "class-variance-authority";
 
+type MaternalInsight = {
+    mostCommonMood: { mood: string; duration: number };
+    negativeMoodDays: number;
+    mostFrequentSymptoms: { symptom: string; days: number }[];
+    severeSymptoms: string;
+    activities: string[];
+    activityFrequency: number;
+    priorityAlerts: { type: string; description: string }[];
+    keyInsights: string[];
+    recommendations: string[];
+};
+
+type Patient = {
+    id: string;
+    first_name: string;
+    last_name: string
+    risk_level: string;
+    patient_type: string;
+    pregnancy_weeks: number;
+    maternalInsight: MaternalInsight;
+    trimester: string
+};
+
+// HELPERS MGA KOSA
+
+// helpers (outside the component or at least outside useEffect)
+function formatWeeks(weeks?: number): string {
+  if (!weeks || weeks <= 0) return "Unknown weeks";
+  return `${weeks} week${weeks === 1 ? "" : "s"}`;
+}
+
+function getTrimester(weeks?: number): string {
+  if (!weeks || weeks <= 0) return "Unknown trimester";
+  if (weeks <= 13) return "First trimester";
+  if (weeks <= 27) return "Second trimester";
+  return "Third trimester";
+}
 
 export default function MaternalInsightsComponent() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { patientId } = useParams<{ patientId: string }>();
+
+    const [patient, setPatient] = useState<Patient | null>(null);
+    const [loading, setLoading] = useState(true);
 
     const searchParams = new URLSearchParams(location.search);
     const patientName = searchParams.get("name");
 
-    const patient = dummyPatients.find(p => p.name === patientName) || null;
+
+    
+
+    useEffect(() => {
+        const fetchPatientData = async () => {
+            setLoading(true);
+
+            if (!patientId) {
+                setLoading(false);
+                return;
+            }
+
+            // Get patient basic info
+            const { data: patientData, error: patientError } = await supabase
+                .from("patient_users")
+                .select("id, first_name,last_name, risk_level, patient_type, pregnancy_weeks")
+                .eq("id", patientId)
+                .single();
+
+            if (patientError || !patientData) {
+                console.error("Error fetching patient:", patientError);
+                setLoading(false);
+                return;
+            }
+
+            // Get latest AI insights
+            const { data: aiData, error: aiError } = await supabase
+                .from("ai_insights")
+                .select("*")
+                .eq("patient_id", patientId)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .single();
+
+            if (aiError || !aiData) {
+                console.error("Error fetching AI insights:", aiError);
+                setLoading(false);
+                return;
+            }
+
+
+
+            const mappedPatient: Patient = {
+                id: patientData.id,
+                first_name: patientData.first_name,
+                last_name: patientData.last_name,
+                risk_level: patientData.risk_level,
+                patient_type: patientData.patient_type,
+                pregnancy_weeks: patientData.pregnancy_weeks,
+                trimester: getTrimester(patientData.pregnancy_weeks),
+                maternalInsight: {
+                    mostCommonMood: {
+                        mood: aiData.most_common_mood?.mood || "Neutral",
+                        duration: aiData.most_common_mood?.duration || 0,
+                    },
+                    negativeMoodDays: aiData.negative_mood_days || 0,
+                    mostFrequentSymptoms: aiData.most_frequent_symptoms || [],
+                    severeSymptoms: aiData.severe_symptoms || "None",
+                    activities: aiData.activities || [],
+                    activityFrequency: aiData.activity_frequency || 0,
+                    priorityAlerts: aiData.priority_alerts || [],
+                    keyInsights: aiData.key_insights || [],
+                    recommendations: aiData.recommendations || [],
+                }
+            };
+
+            setPatient(mappedPatient);
+            setLoading(false);
+        };
+
+        fetchPatientData();
+    }, [patientId]);
 
     const getAlertColors = (type: string) => {
         if (type === "Mood Alert") {
@@ -54,17 +167,22 @@ export default function MaternalInsightsComponent() {
         return str.charAt(0).toUpperCase() + str.slice(1);
     }
 
-
     const normalizeStatusVariant = (status: string) =>
         (status.charAt(0).toUpperCase() + status.slice(1)) as VariantProps<typeof badgeVariants>["variant"];
 
+    if (loading) {
+        return (
+            <div className="flex h-screen items-center justify-center">
+                <p className="text-gray-500">Loading insights...</p>
+            </div>
+        );
+    }
 
     if (!patient) {
         return (
             <div className="flex h-screen flex-col md:flex-row">
                 <div className="flex flex-col flex-1 md:ml-[260px] bg-gray-50">
                     <header className="fixed top-0 left-0 md:left-[260px] right-0 h-10 bg-white shadow-sm z-10">
-                    
                     </header>
                     <main className="fixed top-10 left-0 md:left-[260px] right-0 bottom-0 overflow-hidden mt-2">
                         <div className="h-full w-full overflow-y-auto scrollbar-hide p-6">
@@ -81,7 +199,7 @@ export default function MaternalInsightsComponent() {
 
             <div className="flex flex-col flex-1 md:ml-[260px] bg-gray-50 w-full">
                 <header className="fixed top-0 left-0 md:left-[260px] right-0 h-10 bg-white shadow-sm z-10">
-        
+
                 </header>
 
                 <main className="fixed top-10 left-0 md:left-[260px] right-0 bottom-0 overflow-hidden mt-2">
@@ -122,18 +240,21 @@ export default function MaternalInsightsComponent() {
                                 <div className="flex items-center  gap-3
                                 ">
 
-                                    <p className="text-[20px] font-semibold ">{patient.name}</p>
+                                    <p className="text-[20px] font-semibold ">{patient.first_name}{patient.last_name}</p>
                                     <Badge
                                         className=""
-                                        variant={normalizeStatusVariant(patient.status)}>
-                                        {capitalize(patient.status)}
+                                        variant={normalizeStatusVariant(patient.risk_level)}>
+                                        {capitalize(patient.risk_level)}
                                     </Badge>
 
                                 </div>
 
                                 <div className="flex items-center gap-1">
-                                    <Icon icon="pajamas:status-closed" className="text-[#E46B64]" />
-                                    <p className="font-lato text-[15px] text-[#E46B64]">{patient.appointmentType}</p>
+                                    <Icon icon="pajamas:status-closed" className="text-[#616161]" />
+                                    <p className="font-lato text-[15px] text-[#616161]">
+                                        {patient.patient_type}, {formatWeeks(patient.pregnancy_weeks)} ({getTrimester(patient.pregnancy_weeks)})
+                                    </p>
+
                                 </div>
 
 
@@ -187,9 +308,10 @@ export default function MaternalInsightsComponent() {
                                         </div>
 
                                         <Progress
-                                            value={(4 / 7) * 100}
-                                            className="ml-3 h-2 bg-gray-200 rounded-full  mt-[-40px] [&>div]:bg-[#EF4444] w-[90%]"
+                                            value={(patient.maternalInsight.negativeMoodDays / 7) * 100}
+                                            className="ml-3 h-2 bg-gray-200 rounded-full mt-[-40px] [&>div]:bg-[#EF4444] w-[90%]"
                                         />
+
                                     </Card>
 
                                     {/* Symptoms card */}
@@ -394,16 +516,21 @@ export default function MaternalInsightsComponent() {
                                                 </CardTitle>
                                             </div>
 
-                                            <ul className="space-y-2">
-                                                {patient.maternalInsight.keyInsights.map((insight, index) => (
-                                                    <li key={index} className="flex items-start">
-                                                        <span className="w-2 h-2 bg-black rounded-full mt-[6px] mr-2 flex-shrink-0" />
-                                                        <p className="text-[15px] text-gray-700 leading-snug break-words">
-                                                            {insight}
-                                                        </p>
-                                                    </li>
-                                                ))}
-                                            </ul>
+                                            {patient.maternalInsight.keyInsights?.length > 0 ? (
+                                                <ul className="space-y-2">
+                                                    {patient.maternalInsight.keyInsights.map((insight, index) => (
+                                                        <li key={index} className="flex items-start">
+                                                            <span className="w-2 h-2 bg-black rounded-full mt-[6px] mr-2 flex-shrink-0" />
+                                                            <p className="text-[15px] text-gray-700 leading-snug break-words">
+                                                                {insight}
+                                                            </p>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <p className="text-sm text-gray-500">No insights available</p>
+                                            )}
+
                                         </Card>
 
                                         <Card className="border border-gray-200 w-full bg-gray rounded-lg flex flex-col p-4">
@@ -431,16 +558,22 @@ export default function MaternalInsightsComponent() {
                                                 </CardTitle>
                                             </div>
 
-                                            <ul className="space-y-2">
-                                                {patient.maternalInsight.recommendations.map((rec, index) => (
-                                                    <li key={index} className="flex items-start">
-                                                        <span className="w-2 h-2 bg-black rounded-full mt-[6px] mr-2 flex-shrink-0" />
-                                                        <p className="text-[15px] text-gray-700 leading-snug break-words">
-                                                            {rec}
-                                                        </p>
-                                                    </li>
-                                                ))}
-                                            </ul>
+                                            {patient.maternalInsight.recommendations?.length > 0 ? (
+                                                <ul className="space-y-2">
+                                                    {patient.maternalInsight.recommendations.map((rec, index) => (
+                                                        <li key={index} className="flex items-start">
+                                                            <span className="w-1.5 h-1.5 bg-black rounded-full mt-[7px] mr-2 flex-shrink-0" />
+
+                                                            <p className="text-[15px] text-gray-700 leading-snug break-words">
+                                                                {rec}
+                                                            </p>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <p className="text-sm text-gray-500">No recommendations available</p>
+                                            )}
+
                                         </Card>
                                     </div>
                                 </div>

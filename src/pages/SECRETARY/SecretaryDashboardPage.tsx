@@ -66,9 +66,9 @@ export default function SecretaryDashboardPage() {
             <div className="flex gap-9 mt-2 items-start">
                 {/* Left Column */}
                 <div className="flex-1">
-                    <div className="grid grid-cols-3 gap-10">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {/* Total Patients */}
-                        <div className="w-[250px] bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
+                        <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-gray-500 font-semibold text-[15px]">Total Number of Patients</h3>
                                 <div className="bg-[#7C3AED1A] p-2 rounded-md">
@@ -79,7 +79,7 @@ export default function SecretaryDashboardPage() {
                         </div>
 
                         {/* Upcoming Appointments */}
-                        <div className="w-[250px] bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
+                        <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-gray-500 font-semibold text-[15px]">Accepted Appointments</h3>
                                 <div className="bg-[#06B6D41A] p-2 rounded-md">
@@ -90,7 +90,7 @@ export default function SecretaryDashboardPage() {
                         </div>
 
                         {/* Unread Messages */}
-                        <div className="w-[250px] bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
+                        <div className="bg-white rounded-xl shadow-sm p-6 cursor-pointer hover:shadow-md transition duration-200">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-gray-500 font-semibold text-[15px]">Pending Appointments</h3>
                                 <div className="bg-[#DC26261A] p-2 rounded-md">

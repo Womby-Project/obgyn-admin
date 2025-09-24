@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Alert,  AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import { Badge, badgeVariants } from "@/components/ui/badge";
@@ -154,11 +154,13 @@ export default function AppointmentPage() {
       last_name,
       pregnancy_weeks,
       patient_type
-    ),
-    appointment_followups ( id, follow_up_datetime )
+    )
   `)
           .eq("obgyn_id", obgynId)
-          .order("appointment_datetime", { ascending: false });
+          .order("status", { ascending: true }) // this won’t work well for custom priority
+          .order("appointment_datetime", { ascending: true });
+
+
 
 
 
@@ -479,23 +481,32 @@ export default function AppointmentPage() {
                                     return (
                                       <>
                                         {/* Call Button */}
+                                        {/* Call Button */}
                                         <HoverCard>
                                           <HoverCardTrigger asChild>
                                             <Button
                                               variant="ghost"
                                               size="icon"
                                               disabled={callDisabled}
-                                              className={`w-8 h-8 p-0 ${isAccepted
+                                              onClick={() => {
+                                                navigate(`/inbox/${appt.patientId}`, {
+                                                  state: {
+                                                    appointmentId: appt.id,
+                                                    patientName: appt.patient,
+                                                    autoCall: true, // ✅ trigger auto call
+                                                  },
+                                                });
+
+
+                                              }}
+                                              className={`w-8 h-8 p-0 cursor-pointer ${isAccepted
                                                 ? "bg-[#65B43B] hover:shadow-md"
-                                                : isDone
-                                                  ? "bg-gray-400 cursor-default"
-                                                  : "bg-gray-300 cursor-not-allowed"
+                                                : "bg-gray-300 cursor-not-allowed"
                                                 }`}
                                             >
                                               <Icon
                                                 icon="material-symbols:call"
-                                                className={`w-5 h-5 ${isAccepted || isDone ? "text-white" : "text-gray-700"
-                                                  }`}
+                                                className={`w-5 h-5 ${isAccepted ? "text-white" : "text-gray-700"}`}
                                               />
                                             </Button>
                                           </HoverCardTrigger>
@@ -503,6 +514,7 @@ export default function AppointmentPage() {
                                             {isAccepted ? "Call" : isDone ? "Call (inactive)" : "Call (disabled)"}
                                           </HoverCardContent>
                                         </HoverCard>
+
 
                                         {/* ✅ Done Button (only if Accepted or Rescheduled) */}
                                         {(isAccepted || isRescheduled) && (
@@ -537,12 +549,12 @@ export default function AppointmentPage() {
                                                     triggeredBy: user.id,
                                                     type: "appointment_done",
                                                     title: "Appointment Completed",
-                                                    message: "Your appointment has been marked as done ✅.",
+                                                    message: "Your appointment has been marked as done.",
                                                     relatedAppointmentId: appt.id,
                                                   });
                                                 }
 
-                                                toast.success("Appointment marked as Done ✅");
+                                                toast.success("Appointment marked as Done");
                                               } catch (err) {
                                                 console.error(err);
                                                 toast.error("Failed to mark as Done ❌");
@@ -721,23 +733,48 @@ export default function AppointmentPage() {
 
               toast.info("Scheduling follow-up...");
 
-              setAppointments((prev) =>
-                prev.map((a) =>
-                  a.id === newFollowUp.appointment_id
-                    ? {
-                      ...a,
-                      appointment_type: "Follow-up Checkup",
-                      appointment_datetime: newFollowUp.follow_up_datetime,
-                    }
-                    : a
-                )
-              );
+              if (!selectedAppointment?.id || !selectedAppointment?.patientId) {
+                toast.error("No appointment selected ❌");
+                return;
+              }
 
-              await new Promise((r) => setTimeout(r, 1000));
+              // 1️⃣ Mark the old appointment as Done
+              const { error: updateError } = await supabase
+                .from("appointments")
+                .update({ status: "Done" })
+                .eq("id", selectedAppointment.id);
 
-              // ✅ send notification here
+              if (updateError) throw updateError;
+
+              // 2️⃣ Create a new appointment row for the follow-up
+              const { data: newAppt, error: insertError } = await supabase
+                .from("appointments")
+                .insert([
+                  {
+                    obgyn_id: (await supabase.auth.getUser()).data.user?.id, // or derive obgynId like in fetchAppointments
+                    patient_id: selectedAppointment.patientId,
+                    appointment_datetime: newFollowUp.follow_up_datetime,
+                    appointment_type: "Follow-up Checkup",
+                    status: "Accepted", // or "Pending", depending on your flow
+                    parent_appointment_id: selectedAppointment.id,
+                  },
+                ])
+                .select()
+                .single();
+
+              if (insertError) throw insertError;
+
+              // 3️⃣ Update local state (add the new appointment)
+              setAppointments((prev) => [
+                ...prev.map((a) =>
+                  a.id === selectedAppointment.id ? { ...a, status: "Done" } : a
+                ),
+                newAppt as AppointmentRow,
+              ]);
+
+              // 4️⃣ Send notification
               const { data: { user } } = await supabase.auth.getUser();
-              if (selectedAppointment?.patientId && user) {
+              if (user) {
                 await sendNotification({
                   recipientId: selectedAppointment.patientId,
                   triggeredBy: user.id,
@@ -746,17 +783,19 @@ export default function AppointmentPage() {
                   message: `You have a follow-up scheduled on ${new Date(
                     newFollowUp.follow_up_datetime
                   ).toLocaleString()}.`,
-                  relatedAppointmentId: selectedAppointment.id,
-                  relatedFollowupId: newFollowUp.id,
+                  relatedAppointmentId: newAppt.id,
                 });
               }
 
               toast.success("Follow-up successfully scheduled 🗓️");
+              setOpenFollowUp(false);
+              setSelectedAppointment(null);
             } catch (err) {
               toast.error("Something went wrong ❌");
               console.error(err);
             }
           }}
+
         />
 
 

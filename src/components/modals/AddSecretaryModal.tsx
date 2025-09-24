@@ -12,15 +12,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabaseClient"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, XCircle } from "lucide-react"
+import { CheckCircle, XCircle, Loader2 } from "lucide-react"
 
 type SecretaryCreationModalProps = {
   trigger?: React.ReactNode
   obgynId?: string
   onSuccess?: () => void | Promise<void>
 }
-
-
 
 export default function SecretaryCreationModal({
   trigger,
@@ -33,7 +31,6 @@ export default function SecretaryCreationModal({
     email: "",
     password: "",
     confirmPassword: "",
-  
   })
 
   const [open, setOpen] = useState(false)
@@ -118,13 +115,13 @@ export default function SecretaryCreationModal({
 
       if (insertError) throw insertError
 
-      setSuccess(`Secretary ${formData.firstName} ${formData.lastName} created successfully!`)
+      setSuccess(
+        `Secretary ${formData.firstName} ${formData.lastName} created successfully!`
+      )
       resetForm()
 
-      // ✅ Call onSuccess if provided
       if (onSuccess) await onSuccess()
 
-      // Auto-close after short delay
       setTimeout(() => {
         setOpen(false)
         setSuccess(null)
@@ -138,82 +135,85 @@ export default function SecretaryCreationModal({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ? (
-          trigger
-        ) : (
-          <Button className="bg-[#E46B64] text-white hover:bg-[#d65c58]">
-            Add a Clinic Secretary
-          </Button>
-        )}
-      </DialogTrigger>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
 
-      <DialogContent className="w-[95%] max-w-[500px] font-lato bg-white border-none rounded-lg p-6">
-        <DialogTitle className="text-center text-[18px] font-semibold mb-4">
-          Create Clinic Secretary Account
+      <DialogContent className="w-[95%] max-w-[480px] bg-white border-none rounded-2xl shadow-lg p-6 font-lato">
+        <DialogTitle className="text-center text-lg font-semibold text-gray-800 mb-6">
+          Create Clinic Secretary
         </DialogTitle>
 
-        <div className="flex flex-col gap-4">
-          <div>
-            <Label>First Name</Label>
-            <Input
-              name="firstName"
-              value={formData.firstName}
-              onChange={handleChange}
-              placeholder="Enter first name"
-              className="bg-white border border-[#ECEEF0] h-[45px]"
-            />
+        <div className="flex flex-col gap-5">
+          {/* Form fields */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium text-gray-700">
+                First Name
+              </Label>
+              <Input
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleChange}
+                placeholder="Jane"
+                className="bg-gray-50 border border-gray-200 h-11 rounded-lg focus:ring-2 focus:ring-[#E46B64]/40"
+              />
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium text-gray-700">
+                Last Name
+              </Label>
+              <Input
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                placeholder="Doe"
+                className="bg-gray-50 border border-gray-200 h-11 rounded-lg focus:ring-2 focus:ring-[#E46B64]/40"
+              />
+            </div>
           </div>
 
           <div>
-            <Label>Last Name</Label>
-            <Input
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange}
-              placeholder="Enter last name"
-              className="bg-white border border-[#ECEEF0] h-[45px]"
-            />
-          </div>
-
-          <div>
-            <Label>Email Address</Label>
+            <Label className="text-sm font-medium text-gray-700">
+              Email Address
+            </Label>
             <Input
               name="email"
               type="email"
               value={formData.email}
               onChange={handleChange}
-              placeholder="Enter email"
-              className="bg-white border border-[#ECEEF0] h-[45px]"
+              placeholder="janedoe@email.com"
+              className="bg-gray-50 border border-gray-200 h-11 rounded-lg focus:ring-2 focus:ring-[#E46B64]/40"
             />
           </div>
 
           <div>
-            <Label>Password</Label>
+            <Label className="text-sm font-medium text-gray-700">Password</Label>
             <Input
               name="password"
               type="password"
               value={formData.password}
               onChange={handleChange}
-              placeholder="Enter password"
-              className="bg-white border border-[#ECEEF0] h-[45px]"
+              placeholder="••••••••"
+              className="bg-gray-50 border border-gray-200 h-11 rounded-lg focus:ring-2 focus:ring-[#E46B64]/40"
             />
           </div>
 
           <div>
-            <Label>Confirm Password</Label>
+            <Label className="text-sm font-medium text-gray-700">
+              Confirm Password
+            </Label>
             <Input
               name="confirmPassword"
               type="password"
               value={formData.confirmPassword}
               onChange={handleChange}
-              placeholder="Re-enter password"
-              className="bg-white border border-[#ECEEF0] h-[45px]"
+              placeholder="••••••••"
+              className="bg-gray-50 border border-gray-200 h-11 rounded-lg focus:ring-2 focus:ring-[#E46B64]/40"
             />
           </div>
 
-          {/* Password Checker */}
-          <div className="text-xs text-gray-600 mt-1 space-y-1">
+          {/* Password strength */}
+          <div className="text-xs mt-1 space-y-1">
             <p className={passwordChecks.length ? "text-green-600" : "text-red-500"}>
               • At least 8 characters
             </p>
@@ -224,27 +224,28 @@ export default function SecretaryCreationModal({
               • At least 1 number
             </p>
             <p className={passwordChecks.mixedCase ? "text-green-600" : "text-red-500"}>
-              • Combination of lower & upper case letters
+              • Upper & lower case letters
             </p>
           </div>
 
           {/* Alerts */}
           {error && (
-            <Alert className="bg-red-100 border-l-4 border-[#E46B64] text-[#E46B64] text-sm">
-              <XCircle className="h-4 w-4" />
+            <Alert className="bg-red-50 border-l-4 border-red-500 text-red-700 text-sm flex items-center gap-2">
+              <XCircle className="h-4 w-4 shrink-0" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
           {success && (
-            <Alert className="bg-green-100 border-l-4 border-green-600 text-green-700 text-sm">
-              <CheckCircle className="h-4 w-4" />
+            <Alert className="bg-green-50 border-l-4 border-green-600 text-green-700 text-sm flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 shrink-0" />
               <AlertDescription>{success}</AlertDescription>
             </Alert>
           )}
 
+          {/* Submit */}
           <Button
-            className="bg-[#E46B64] text-white hover:bg-[#d65c58] mt-3"
+            className="bg-[#E46B64] text-white hover:bg-[#d65c58] h-11 rounded-xl font-medium mt-2"
             onClick={handleSubmit}
             disabled={
               loading ||
@@ -252,7 +253,13 @@ export default function SecretaryCreationModal({
               formData.password !== formData.confirmPassword
             }
           >
-            {loading ? "Creating..." : "Create Account"}
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="animate-spin h-4 w-4" /> Creating...
+              </span>
+            ) : (
+              "Create Account"
+            )}
           </Button>
         </div>
       </DialogContent>

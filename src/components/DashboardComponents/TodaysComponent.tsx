@@ -102,7 +102,8 @@ export default function ScheduleComponent() {
     }, [])
 
     return (
-        <div className="bg-white rounded-xl shadow-sm p-6 w-full max-w-[850px] h-[370px] overflow-hidden transition-all duration-300 flex flex-col">
+       <div className="bg-white rounded-xl shadow-sm p-6 w-full h-auto min-h-[370px] overflow-hidden transition-all duration-300 flex flex-col ">
+
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div className="flex flex-col">

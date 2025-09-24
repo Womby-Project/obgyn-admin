@@ -74,7 +74,7 @@ export default function SecretarySchedule() {
   }, []);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6 h-[370px] max-w-[850px] overflow-hidden ">
+    <div className="bg-white rounded-xl shadow-sm p-6 w-full h-auto min-h-[370px] overflow-hidden transition-all duration-300 flex flex-col ">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>

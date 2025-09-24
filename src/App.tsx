@@ -23,6 +23,8 @@ import SecretaryDashboard from "@/pages/SECRETARY/SecretaryDashboardPage"
 import SecretaryAppointmentDirectory from "@/pages/SECRETARY/SecretaryAppointmentDirectory"
 import SecretarySettings from '@/pages/SECRETARY/SecretarySettingsLayout';
 import SecretaryPatientDirectory from '@/pages/SECRETARY/SecretaryPatientDirectory'
+import VideoCall from "@/pages/OBGYN/VideoCallpage";
+
 
 // 
 export default function App() {
@@ -37,6 +39,9 @@ export default function App() {
           </PageTitle>
         }
       />
+
+      <Route path="/video-call/:roomId" element={<VideoCall />} />
+
 
       {/* Registration */}
       <Route element={<MultiStepLayout />}>
@@ -106,6 +111,16 @@ export default function App() {
             }
           />
 
+          {/* Inbox Chat (patient-specific) */}
+          <Route
+            path="/inbox/:patientId"
+            element={
+              <PageTitle title="Inbox Chat - OBGYN">
+                <Inbox />
+              </PageTitle>
+            }
+          />
+
           {/* Appointments */}
           <Route path="/appointments">
             <Route
@@ -137,13 +152,14 @@ export default function App() {
               }
             />
             <Route
-              path="maternalinsight"
+              path="maternalinsight/:patientId"
               element={
                 <PageTitle title="Maternal Insight - OBGYN">
                   <PatientMaternalInsight />
                 </PageTitle>
               }
             />
+
             <Route
               path="patientprofile/:patientId"
               element={
@@ -173,9 +189,9 @@ export default function App() {
               </PageTitle>
             }
           />
-
         </Route>
       </Route>
+
 
 
       {/* Protected - Secretary */}

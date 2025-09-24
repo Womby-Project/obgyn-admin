@@ -3,10 +3,8 @@ import { useNavigate } from "react-router-dom";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { ShieldCheck } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
-
+import { Icon } from "@iconify/react";
 import { useProfile } from "@/hooks/hooksforNotifcation/useProfile";
 import { useNotifications } from "@/hooks/hooksforNotifcation/useNotifcation";
 import { NotificationList } from "@/components/NotificationList";
@@ -14,6 +12,7 @@ import { NotificationList } from "@/components/NotificationList";
 function Header() {
   const profile = useProfile();
   const { notifications, setNotifications } = useNotifications(profile?.id);
+
   const navigate = useNavigate();
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
@@ -73,29 +72,23 @@ function Header() {
               <AvatarFallback>{initial}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col text-sm leading-tight">
-              <p className="font-semibold text-gray-900 text-base">
-                {profile?.name || "Loading..."}
-              </p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <Badge
-                  variant={
-                    profile?.role === "obgyn"
-                      ? "obgyn"
+              <div className="flex items-center gap-1">
+                <span className="font-semibold text-gray-900 text-base">
+                  <span className="font-bold">
+                    {profile?.role === "obgyn"
+                      ? "Dr. "
                       : profile?.role === "secretary"
-                      ? "secretary"
-                      : "default"
-                  }
-                  className="px-2 py-0.5 text-xs rounded-md"
-                >
-                  {profile?.role === "obgyn"
-                    ? "OBGYN"
-                    : profile?.role === "secretary"
-                    ? "Secretary"
-                    : "Unknown"}
-                  <ShieldCheck className="text-indigo-600 h-4 w-4 ml-1" />
-                </Badge>
+                        ? "Sec. "
+                        : ""}
+                  </span>
+                  {profile?.name || "Loading..."}
+                </span>
+                {profile?.is_verified && (
+                  <Icon icon="mdi:approval" className="h-4 w-4 text-blue-400" />
+                )}
               </div>
             </div>
+
           </div>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-44 p-2 bg-white border border-gray-100">

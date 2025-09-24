@@ -7,6 +7,7 @@ export type UserProfile = {
   name: string;
   role: "secretary" | "obgyn";
   avatar_url?: string;
+  is_verified: boolean
 };
 
 export function useProfile() {
@@ -19,7 +20,7 @@ export function useProfile() {
 
       const { data: secretaryData } = await supabase
         .from("secretary_users")
-        .select("id, first_name, last_name, profile_picture_url")
+        .select("id, first_name, last_name, profile_picture_url, is_verified")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -29,13 +30,14 @@ export function useProfile() {
           name: `${secretaryData.first_name} ${secretaryData.last_name}`,
           role: "secretary",
           avatar_url: secretaryData.profile_picture_url,
+          is_verified: secretaryData.is_verified ?? false,
         });
         return;
       }
 
       const { data: obgynData } = await supabase
         .from("obgyn_users")
-        .select("id, first_name, last_name, profile_picture_url")
+        .select("id, first_name, last_name, profile_picture_url, is_verified")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -45,6 +47,7 @@ export function useProfile() {
           name: `${obgynData.first_name} ${obgynData.last_name}`,
           role: "obgyn",
           avatar_url: obgynData.profile_picture_url,
+          is_verified: obgynData.is_verified ?? false,
         });
       }
     };
