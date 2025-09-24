@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/Womby-Project/obgyn-admin/compare/v1.1.1...v1.1.2) (2025-09-24)
+
+
+### Bug Fixes
+
+* Fix various screens and bugs and added more features and functions in this update ([657ab9e](https://github.com/Womby-Project/obgyn-admin/commit/657ab9e32951b98dbcc60e8ad83a364357d1b58f))
+
 ## [1.1.1](https://github.com/Womby-Project/obgyn-admin/compare/v1.1.0...v1.1.1) (2025-09-08)
 
 
