@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/Womby-Project/obgyn-admin/compare/v1.1.2...v1.2.0) (2025-09-24)
+
+
+### Features
+
+* Added fully functional chat feature ([8cc289c](https://github.com/Womby-Project/obgyn-admin/commit/8cc289cf672f3a861347d42407aef9af27812ccb))
+
 ## [1.1.2](https://github.com/Womby-Project/obgyn-admin/compare/v1.1.1...v1.1.2) (2025-09-24)
 
 
