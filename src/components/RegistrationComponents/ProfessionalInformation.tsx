@@ -27,17 +27,25 @@ export default function ProfessionalInformation() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+
+      // 50MB = 50 * 1024 * 1024 bytes
+      if (file.size > 50 * 1024 * 1024) {
+        alert("File is too large! Please upload a file under 50MB.");
+        return;
+      }
+
       setFileName(file.name);
 
-      setFormData((prev: any) => {
-        const updated = { ...prev, prc_id_file: file };
-        return updated;
-      });
+      setFormData((prev: any) => ({
+        ...prev,
+        prc_id_file: file,
+      }));
 
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
     }
   };
+
 
   useEffect(() => {
     return () => {

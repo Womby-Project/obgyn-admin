@@ -13,10 +13,11 @@ export default function BasicInformation() {
   const { step, totalSteps, formData, setFormData } =
     useOutletContext<StepContext>();
 
-  const [first_name, setFirstName] = useState(formData.firstName || "");
-  const [last_name, setLastName] = useState(formData.lastName || "");
+  const [first_name, setFirstName] = useState(formData.first_name || "");
+  const [last_name, setLastName] = useState(formData.last_name || "");
   const [gender, setGender] = useState(formData.gender || "");
-  const [email, setEmail] = useState(formData.email || "");
+  const [email, setEmail] = useState(formData.accountInfo?.email || "");
+
 
   const handleContinue = () => {
     const updatedFormData = {
