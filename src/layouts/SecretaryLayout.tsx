@@ -130,10 +130,6 @@ export default function SecretaryLayout() {
       <div className="flex flex-col flex-1 ml-[260px] bg-gray-50">
         <header className="fixed top-0 left-[260px] right-0 h-6 bg-white shadow-sm z-10">
           <Header
-            name={user?.name}
-            title={user?.role}
-            avatarUrl={user?.avatarUrl}
-            hasNotifications={true}
           />
         </header>
 

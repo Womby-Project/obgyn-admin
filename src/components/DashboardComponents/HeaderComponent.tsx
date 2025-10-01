@@ -10,6 +10,7 @@ import { useNotifications } from "@/hooks/hooksforNotifcation/useNotifcation";
 import { NotificationList } from "@/components/NotificationList";
 
 function Header() {
+  
   const profile = useProfile();
   const { notifications, setNotifications } = useNotifications(profile?.id);
 

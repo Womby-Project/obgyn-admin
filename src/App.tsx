@@ -24,18 +24,13 @@ import SecretaryAppointmentDirectory from "@/pages/SECRETARY/SecretaryAppointmen
 import SecretarySettings from '@/pages/SECRETARY/SecretarySettingsLayout';
 import SecretaryPatientDirectory from '@/pages/SECRETARY/SecretaryPatientDirectory'
 import VideoCall from "@/pages/OBGYN/VideoCallpage";
-import Articles from "@/pages/Article";
-import ArticlePage from "@/pages/ArticlePage";
+
 
 // 
 export default function App() {
   return (
     <Routes>
-      {/* test pages */}
-
-      <Route path="/articles" element={<Articles />} />
-
-      <Route path="/article/:id" element={<ArticlePage />} />
+ 
 
       {/* Public */}
       <Route

@@ -46,7 +46,7 @@ export default function OBGYNAvailability() {
   const [draftSchedules, setDraftSchedules] = useState<any[]>([])
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [open, setOpen] = useState(false)
-  const [userId, setUserId] = useState<string | null>(null)
+  const [, setUserId] = useState<string | null>(null)
   const [obgynId, setObgynId] = useState<string | null>(null)
 
   const toggleDay = (day: string) => {

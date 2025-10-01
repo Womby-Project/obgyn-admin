@@ -20,7 +20,7 @@ export default function ProfessionalInformation() {
   const navigate = useNavigate();
   const { step, totalSteps, formData, setFormData } = useOutletContext<StepContext>();
 
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [, setFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 

@@ -4,9 +4,7 @@ import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import {
   Card,
   CardAction,
-  CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
