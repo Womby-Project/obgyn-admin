@@ -1,3 +1,11 @@
+# [1.3.0](https://github.com/Womby-Project/obgyn-admin/compare/v1.2.1...v1.3.0) (2025-10-01)
+
+
+### Features
+
+* minimal changes ([e5c3959](https://github.com/Womby-Project/obgyn-admin/commit/e5c39590785f6e97c4a4fe0f0767fffd809f9c14))
+* Minimal changes ([fe56041](https://github.com/Womby-Project/obgyn-admin/commit/fe5604124e9442e84b3d0cc4e211661371072572))
+
 ## [1.2.1](https://github.com/Womby-Project/obgyn-admin/compare/v1.2.0...v1.2.1) (2025-09-27)
 
 
