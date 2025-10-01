@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/Womby-Project/obgyn-admin/compare/v1.2.0...v1.2.1) (2025-09-27)
+
+
+### Bug Fixes
+
+* Fixes bugs in videocall feature ([e3848ff](https://github.com/Womby-Project/obgyn-admin/commit/e3848fff9e66e18dcbb2462c3586102e27b152b3))
+
 # [1.2.0](https://github.com/Womby-Project/obgyn-admin/compare/v1.1.2...v1.2.0) (2025-09-24)
 
 
