@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/Womby-Project/obgyn-admin/compare/v1.3.1...v1.3.2) (2025-10-01)
+
+
+### Bug Fixes
+
+* vercel build ([83efda2](https://github.com/Womby-Project/obgyn-admin/commit/83efda212862d4b4575832dc10fb36192423520c))
+
 ## [1.3.1](https://github.com/Womby-Project/obgyn-admin/compare/v1.3.0...v1.3.1) (2025-10-01)
 
 
