@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AgoraRTC, {
   type IAgoraRTCClient,
   type ICameraVideoTrack,
@@ -34,7 +34,7 @@ export default function VideoCall({
   const clientRef = useRef<IAgoraRTCClient | null>(null);
 
   // refs for DOM video containers
-  const localMainRef = useRef<HTMLDivElement | null>(null);
+
   const localPipRef = useRef<HTMLDivElement | null>(null);
   const remoteMainRef = useRef<HTMLDivElement | null>(null);
   const remoteSplitRef = useRef<HTMLDivElement | null>(null);

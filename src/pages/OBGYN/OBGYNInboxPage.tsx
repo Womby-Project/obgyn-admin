@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import SearchIcon from "@mui/icons-material/Search";
 import rebeca from "@/assets/rebeca.png";
 import CallReceivedIcon from "@mui/icons-material/CallReceived";
@@ -60,17 +60,6 @@ type TypingStatus = {
   updated_at: string;
 };
 
-type UserProfile = {
-  id: string;
-  first_name: string;
-  last_name: string;
-  avatar_url: string;
-};
-
-// ------------------ DUMMY CALLS ------------------
-
-
-
 
 // ------------------ COMPONENT ------------------
 
@@ -90,7 +79,6 @@ export default function InboxPage() {
   const [calls, setCalls] = useState<any[]>([]);
   const [isCalling, setIsCalling] = useState(false);
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
 
   // ✅ Get logged-in user

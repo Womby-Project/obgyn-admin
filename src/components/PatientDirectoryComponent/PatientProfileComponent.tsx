@@ -111,7 +111,7 @@ export default function PatientProfileComponent() {
             let obgynId: string | null = null;
 
             // 🔹 First check if OBGYN
-            const { data: obgyn, error: obgynError } = await supabase
+            const { data: obgyn,  } = await supabase
                 .from("obgyn_users")
                 .select("id")
                 .eq("id", user.id)
@@ -122,7 +122,7 @@ export default function PatientProfileComponent() {
                 obgynId = obgyn.id;
             } else {
                 // 🔹 Otherwise check if Secretary
-                const { data: secretary, error: secError } = await supabase
+                const { data: secretary,   } = await supabase
                     .from("secretary_users")
                     .select("obgyn_id")
                     .eq("id", user.id)
