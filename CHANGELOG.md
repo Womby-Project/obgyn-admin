@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/Womby-Project/obgyn-admin/compare/v1.3.0...v1.3.1) (2025-10-01)
+
+
+### Bug Fixes
+
+* Errors for vercel ([e5a3021](https://github.com/Womby-Project/obgyn-admin/commit/e5a30215e96231e774daac4b76ad63cd263c03bf))
+
 # [1.3.0](https://github.com/Womby-Project/obgyn-admin/compare/v1.2.1...v1.3.0) (2025-10-01)
 
 
