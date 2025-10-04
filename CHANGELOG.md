@@ -1,3 +1,10 @@
+## [1.3.4](https://github.com/Womby-Project/obgyn-admin/compare/v1.3.3...v1.3.4) (2025-10-01)
+
+
+### Bug Fixes
+
+* Errors and bugs fixes ([99e9d1d](https://github.com/Womby-Project/obgyn-admin/commit/99e9d1dbf9fb66c85f1a3e4c878b82655e81e63e))
+
 ## [1.3.3](https://github.com/Womby-Project/obgyn-admin/compare/v1.3.2...v1.3.3) (2025-10-01)
 
 
