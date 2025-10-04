@@ -1,3 +1,11 @@
+## [1.3.5](https://github.com/Womby-Project/obgyn-admin/compare/v1.3.4...v1.3.5) (2025-10-04)
+
+
+### Bug Fixes
+
+* Fix all needed screens and polish ([cb070ac](https://github.com/Womby-Project/obgyn-admin/commit/cb070ac2b74ac2f96db9435f5f60640bb9cbf58e))
+* Fix some issues and polish some screens ([14db2ae](https://github.com/Womby-Project/obgyn-admin/commit/14db2ae28fdb347f93ed7a7f9602177550055359))
+
 ## [1.3.4](https://github.com/Womby-Project/obgyn-admin/compare/v1.3.3...v1.3.4) (2025-10-01)
 
 
