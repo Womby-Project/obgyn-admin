@@ -46,7 +46,6 @@ export default function ProfessionalInformation() {
     }
   };
 
-
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -65,6 +64,11 @@ export default function ProfessionalInformation() {
       alert("Please select an affiliated hospital.");
       return;
     }
+    // If you want to require Organization too, uncomment:
+    // if (!formData.organization || formData.organization.trim() === "") {
+    //   alert("Please enter your organization.");
+    //   return;
+    // }
     if (!formData.prc_id_file) {
       alert("Please upload your PRC ID.");
       return;
@@ -122,6 +126,25 @@ export default function ProfessionalInformation() {
             <SelectItem value="option3">Option 3</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Organization (NEW — placed right after Affiliated Hospital/s) */}
+      <div className="flex flex-col mt-5">
+        <input
+          type="text"
+          placeholder="Organization (e.g., Davao Doctors Hospital – OB-GYN Dept.)"
+          value={formData.organization || ""}
+          onChange={(e) =>
+            setFormData((prev: any) => ({
+              ...prev,
+              organization: e.target.value,
+            }))
+          }
+          className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-sm w-[362px] h-[45px] px-4"
+        />
+        <span className="text-[12px] text-[#9E9E9E] mt-1">
+          Optional: your clinic, department, or organization name.
+        </span>
       </div>
 
       {/* Upload PRC ID */}

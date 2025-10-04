@@ -13,6 +13,8 @@ import { X, Mic, MicOff, Video, VideoOff, PhoneOff } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Props = {
+  // NEW: callId so we can update & subscribe to this specific call row
+  callId: string;
   roomId: string;
   callerName: string;
   calleeName: string;
@@ -23,6 +25,7 @@ type Props = {
 };
 
 export default function VideoCall({
+  callId, // NEW
   roomId,
   onClose,
   profileUrl,
@@ -34,7 +37,6 @@ export default function VideoCall({
   const clientRef = useRef<IAgoraRTCClient | null>(null);
 
   // refs for DOM video containers
-
   const localPipRef = useRef<HTMLDivElement | null>(null);
   const remoteMainRef = useRef<HTMLDivElement | null>(null);
   const remoteSplitRef = useRef<HTMLDivElement | null>(null);
@@ -51,6 +53,9 @@ export default function VideoCall({
   const [duration, setDuration] = useState(0);
 
   const [splitView, setSplitView] = useState(false);
+
+  // NEW: reflect when a remote-ended signal is received
+  const [callEnded, setCallEnded] = useState(false);
 
   // store own uid
   const uidRef = useRef<number | null>(null);
@@ -83,9 +88,6 @@ export default function VideoCall({
     }
   };
 
-
-
-
   // re-attach when layout or states change
   useEffect(() => {
     if (camTrack) {
@@ -106,6 +108,7 @@ export default function VideoCall({
     return () => {
       leaveCall();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -126,6 +129,41 @@ export default function VideoCall({
       if (interval) clearInterval(interval);
     };
   }, [callStarted]);
+
+  // NEW: subscribe to this callId; if ended_at is set by the other party, auto-end here too
+  useEffect(() => {
+    if (!callId) return;
+
+    const channel = supabase
+      .channel(`chat_calls:end:${callId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "chat_calls",
+          filter: `id=eq.${callId}`,
+        },
+        (payload) => {
+         
+          const newRow = payload.new as { ended_at?: string | null };
+          if (newRow?.ended_at) {
+            setCallEnded(true);
+            // Briefly show "Call ended", then leave & cleanup
+            setTimeout(() => {
+              leaveCall();
+            }, 1200);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
+    };
+  }, [callId]);
 
   const joinCall = async () => {
     if (joined) return;
@@ -216,13 +254,12 @@ export default function VideoCall({
     });
   };
 
-
   const leaveCall = async () => {
     if (!clientRef.current) return;
 
     try {
       await clientRef.current.leave();
-    } catch { }
+    } catch {}
     clientRef.current.removeAllListeners?.();
     micTrack?.close();
     camTrack?.close();
@@ -232,10 +269,11 @@ export default function VideoCall({
     setCallStarted(false);
 
     try {
+      // NEW: update by callId (and only once if still null)
       await supabase
         .from("chat_calls")
         .update({ ended_at: new Date() })
-        .eq("room_id", roomId)
+        .eq("id", callId)
         .is("ended_at", null);
     } catch (e) {
       console.warn("Failed updating call ended_at", e);
@@ -244,7 +282,7 @@ export default function VideoCall({
     onClose?.();
     try {
       window.close();
-    } catch { }
+    } catch {}
   };
 
   // Toggle mic
@@ -281,9 +319,6 @@ export default function VideoCall({
     }
   };
 
-
-
-
   const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, "0");
     const s = (seconds % 60).toString().padStart(2, "0");
@@ -312,7 +347,6 @@ export default function VideoCall({
               <ProfilePlaceholder url={profileUrl} small />
             )}
           </div>
-
         </div>
       ) : (
         <>
@@ -335,11 +369,13 @@ export default function VideoCall({
 
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-3 bg-black/40 backdrop-blur-sm">
         <h2 className="font-semibold text-lg text-white">
-          {callStarted
+          {callEnded
+            ? "Call ended"
+            : callStarted
             ? `In Call - ${callerName}, ${calleeName}`
             : joined
-              ? "Waiting for other user..."
-              : "Connecting..."}
+            ? "Waiting for other user..."
+            : "Connecting..."}
         </h2>
         <button
           onClick={leaveCall}
@@ -349,20 +385,19 @@ export default function VideoCall({
         </button>
       </div>
 
-      {callStarted && (
+      {callStarted && !callEnded && (
         <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 text-white text-lg font-semibold">
           {formatDuration(duration)}
         </div>
       )}
 
-      {callStarted && (
+      {callStarted && !callEnded && (
         <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-6">
           <button
             onClick={toggleMic}
-            className={`flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition ${micEnabled
-              ? "bg-blue-500 hover:bg-blue-600"
-              : "bg-gray-700 hover:bg-gray-600"
-              }`}
+            className={`flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition ${
+              micEnabled ? "bg-blue-500 hover:bg-blue-600" : "bg-gray-700 hover:bg-gray-600"
+            }`}
           >
             {micEnabled ? (
               <Mic size={22} className="text-white" />
@@ -373,10 +408,9 @@ export default function VideoCall({
 
           <button
             onClick={toggleCam}
-            className={`flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition ${camEnabled
-              ? "bg-blue-500 hover:bg-blue-600"
-              : "bg-gray-700 hover:bg-gray-600"
-              }`}
+            className={`flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition ${
+              camEnabled ? "bg-blue-500 hover:bg-blue-600" : "bg-gray-700 hover:bg-gray-600"
+            }`}
           >
             {camEnabled ? (
               <Video size={22} className="text-white" />
@@ -391,6 +425,13 @@ export default function VideoCall({
           >
             <PhoneOff size={24} className="text-white" />
           </button>
+        </div>
+      )}
+
+      {/* NEW: subtle centered overlay when call has ended */}
+      {callEnded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+          <div className="text-white text-xl font-semibold">Call ended</div>
         </div>
       )}
     </div>
@@ -415,12 +456,9 @@ function ProfilePlaceholder({
       <img
         src={url}
         alt="Profile"
-        className={`relative rounded-full border-4 border-white shadow-xl object-cover ${large
-          ? "w-40 h-40"
-          : small
-            ? "w-20 h-20 border-2"
-            : "w-32 h-32"
-          }`}
+        className={`relative rounded-full border-4 border-white shadow-xl object-cover ${
+          large ? "w-40 h-40" : small ? "w-20 h-20 border-2" : "w-32 h-32"
+        }`}
       />
     </div>
   );

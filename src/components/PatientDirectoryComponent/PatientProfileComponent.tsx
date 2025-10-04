@@ -61,6 +61,7 @@ export default function PatientProfileComponent() {
     const [patient, setPatient] = useState<Patient | null>(null);
     const [loading, setLoading] = useState(true);
     const [riskLevel, setRiskLevel] = useState<"Low" | "Moderate" | "High">("Low");
+    const canViewInsights = userRole === "obgyn";
 
 
 
@@ -111,7 +112,7 @@ export default function PatientProfileComponent() {
             let obgynId: string | null = null;
 
             // 🔹 First check if OBGYN
-            const { data: obgyn,  } = await supabase
+            const { data: obgyn, } = await supabase
                 .from("obgyn_users")
                 .select("id")
                 .eq("id", user.id)
@@ -122,7 +123,7 @@ export default function PatientProfileComponent() {
                 obgynId = obgyn.id;
             } else {
                 // 🔹 Otherwise check if Secretary
-                const { data: secretary,   } = await supabase
+                const { data: secretary, } = await supabase
                     .from("secretary_users")
                     .select("obgyn_id")
                     .eq("id", user.id)
@@ -247,12 +248,16 @@ export default function PatientProfileComponent() {
                                             </Badge>
 
                                         </CardTitle>
-                                        <Button
-                                            className="text-[#E46B64] hover:bg-gray-100 cursor-pointer text-sm px-4 py-2"
-                                            onClick={() => navigate(`/patientdirectory/maternalinsight/${patient.id}`)}
-                                        >
-                                            View Maternal Insights &gt;
-                                        </Button>
+                                        {/* Only OBGYNs can see this */}
+                                        {canViewInsights && (
+                                            <Button
+                                                className="text-[#E46B64] hover:bg-gray-100 cursor-pointer text-sm px-4 py-2"
+                                                onClick={() => navigate(`/patientdirectory/maternalinsight/${patient.id}`)}
+                                            >
+                                                View Maternal Insights &gt;
+                                            </Button>
+                                        )}
+
                                     </div>
 
                                     {/* Appointment Type */}

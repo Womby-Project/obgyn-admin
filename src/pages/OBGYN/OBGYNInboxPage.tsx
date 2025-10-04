@@ -7,8 +7,8 @@ import VideocamOutlinedIcon from "@mui/icons-material/VideocamOutlined";
 import MoreHorizOutlinedIcon from "@mui/icons-material/MoreHorizOutlined";
 import AttachFileOutlinedIcon from "@mui/icons-material/AttachFileOutlined";
 import InsertPhotoOutlinedIcon from "@mui/icons-material/InsertPhotoOutlined";
-import VideoCall from "@/components/modals/videoCall";
 import { supabase } from "@/lib/supabaseClient";
+import  VideoCall  from "@/components/modals/videoCall";
 import type { User } from "@supabase/supabase-js";
 
 import { useParams, useLocation } from "react-router-dom";
@@ -79,6 +79,7 @@ export default function InboxPage() {
   const [calls, setCalls] = useState<any[]>([]);
   const [isCalling, setIsCalling] = useState(false);
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [activeCallId, setActiveCallId] = useState<string | null>(null);
 
 
   // ✅ Get logged-in user
@@ -125,53 +126,77 @@ export default function InboxPage() {
     if (!calleeId) return;
 
     try {
-      // Insert call record
-      const { data: callData, error: callError } = await supabase
+      // 1) Reuse any active call row for this room
+      const { data: existing, error: exErr } = await supabase
         .from("chat_calls")
-        .insert([
-          {
-            room_id: chatId,
-            caller_id: currentUser.id,
-            callee_id: calleeId,
-            started_at: new Date(),
-            status: "ringing",
-          },
-        ])
-        .select();
+        .select("id, status, ended_at")
+        .eq("room_id", chatId)
+        .is("ended_at", null)
+        .limit(1)
+        .maybeSingle();
 
-      if (callError) {
-        console.error("❌ Error creating call:", callError.message);
+      if (exErr) {
+        console.error("❌ check active call failed:", exErr.message);
         return;
       }
 
-      console.log("📞 Outgoing call record created:", callData);
+      let callId = existing?.id ?? null;
 
-      // Build popup URL with query params for names & avatars
+      // 2) Create a new row if none active
+      if (!callId) {
+        const { data: inserted, error: insErr } = await supabase
+          .from("chat_calls")
+          .insert([
+            {
+              room_id: chatId,
+              caller_id: currentUser.id,
+              callee_id: calleeId,
+              started_at: new Date().toISOString(),
+              status: "ringing",
+            },
+          ])
+          .select("id")
+          .single();
+
+        if (insErr) {
+          console.error("❌ Error creating call:", insErr.message);
+          return;
+        }
+        callId = inserted.id;
+      } else {
+        // 3) Ensure a clean non-ended state when reusing
+        await supabase
+          .from("chat_calls")
+          .update({ status: "ringing", ended_at: null })
+          .eq("id", callId);
+      }
+
+      // 4) Build popup URL with callId + display data
       const callerName = currentUser.user_metadata?.full_name || "You";
       const calleeName = chat.name || "Other User";
       const profileUrl = currentUser.user_metadata?.profile_picture_url || "";
       const remoteProfileUrl = chat.img || "";
 
-      const url = `/video-call/${chatId}?callerName=${encodeURIComponent(
-        callerName
-      )}&calleeName=${encodeURIComponent(
-        calleeName
-      )}&profileUrl=${encodeURIComponent(
-        profileUrl
-      )}&remoteProfileUrl=${encodeURIComponent(remoteProfileUrl)}`;
+      const url =
+        `/video-call/${chatId}` +
+        `?callId=${encodeURIComponent(callId)}` +                 // <-- important
+        `&callerName=${encodeURIComponent(callerName)}` +
+        `&calleeName=${encodeURIComponent(calleeName)}` +
+        `&profileUrl=${encodeURIComponent(profileUrl)}` +
+        `&remoteProfileUrl=${encodeURIComponent(remoteProfileUrl)}`;
 
-      // Open new popup window with video call
+      // 5) Open popup
       const popup = window.open(
         url,
         "VideoCallPopup",
         "width=900,height=650,toolbar=no,menubar=no,location=no,status=no"
       );
-
       if (popup) popup.focus();
     } catch (err) {
       console.error("❌ Unexpected error in handleStartCall:", err);
     }
   };
+
 
 
 
@@ -375,11 +400,17 @@ export default function InboxPage() {
       .channel("patient_calls")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_calls", filter: `callee_id=eq.${currentUser.id}` },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_calls",
+          filter: `callee_id=eq.${currentUser.id}`,
+        },
         (payload) => {
           const call = payload.new;
           console.log("Incoming call:", call);
           setActiveRoomId(call.room_id);
+          setActiveCallId(call.id);      // ✅ MISSING
           setIsCalling(true);
         }
       )
@@ -981,24 +1012,29 @@ export default function InboxPage() {
         }
       </div >
 
-      {isCalling && activeRoomId && (
-        <div className="fixed bottom-4 right-4 w-[400px] h-[300px] bg-white shadow-lg rounded-lg z-50 border rounded-2xl overflow-hidden">
+      {isCalling && activeRoomId && activeCallId && (
+        <div className="fixed bottom-4 right-4 w-[400px] h-[300px] bg-white shadow-lg rounded-2xl z-50 border overflow-hidden">
           {(() => {
             const activeChat = chats.find((c) => c.id === activeRoomId);
 
             return (
               <VideoCall
+                callId={activeCallId}                 // ✅ now exists on the component
                 roomId={activeRoomId}
-                onClose={() => setIsCalling(false)}
-                callerName={currentUser?.user_metadata?.full_name || "You"}   // ✅ your actual name
-                calleeName={activeChat?.name || "Unknown User"}              // ✅ other user’s name
-                profileUrl={currentUser?.user_metadata?.profile_picture_url} // ✅ your avatar
-                remoteProfileUrl={activeChat?.img}                           // ✅ other user’s avatar
+                onClose={() => {
+                  setIsCalling(false);
+                  setActiveCallId(null);
+                }}
+                callerName={currentUser?.user_metadata?.full_name || "You"}
+                calleeName={activeChat?.name || "Unknown User"}
+                profileUrl={currentUser?.user_metadata?.profile_picture_url || ""}
+                remoteProfileUrl={activeChat?.img || ""}
               />
             );
           })()}
         </div>
       )}
+
 
 
 

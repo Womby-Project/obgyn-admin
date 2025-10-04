@@ -10,7 +10,7 @@ import { useNotifications } from "@/hooks/hooksforNotifcation/useNotifcation";
 import { NotificationList } from "@/components/NotificationList";
 
 function Header() {
-  
+
   const profile = useProfile();
   const { notifications, setNotifications } = useNotifications(profile?.id);
 
@@ -65,13 +65,22 @@ function Header() {
       <div className="h-6 border-l border-gray-300 mx-4" />
 
       {/* 👤 Avatar + Name */}
+      {/* 👤 Avatar + Name */}
       <Popover>
         <PopoverTrigger asChild>
           <div className="flex sm:flex-row flex-col items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded-md transition text-center sm:text-left">
-            <Avatar className="w-10 h-10 bg-gray-100">
-              <AvatarImage src={profile?.avatar_url || ""} alt={profile?.name} />
-              <AvatarFallback>{initial}</AvatarFallback>
+            <Avatar className="w-10 h-10 rounded-full overflow-hidden ring-1 ring-gray-200">
+              {/* Use undefined when no URL so the fallback renders */}
+              <AvatarImage
+                src={profile?.avatar_url || undefined}
+                alt={profile?.name}
+                className="w-full h-full object-cover object-center"
+              />
+              <AvatarFallback className="text-sm font-semibold">
+                {initial}
+              </AvatarFallback>
             </Avatar>
+
             <div className="flex flex-col text-sm leading-tight">
               <div className="flex items-center gap-1">
                 <span className="font-semibold text-gray-900 text-base">
@@ -89,9 +98,9 @@ function Header() {
                 )}
               </div>
             </div>
-
           </div>
         </PopoverTrigger>
+
         <PopoverContent align="end" className="w-44 p-2 bg-white border border-gray-100">
           <div className="text-sm text-gray-700 space-y-1">
             <button
@@ -103,6 +112,7 @@ function Header() {
           </div>
         </PopoverContent>
       </Popover>
+
     </header>
   );
 }
