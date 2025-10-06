@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/Womby-Project/obgyn-admin/compare/v1.3.5...v1.4.0) (2025-10-06)
+
+
+### Features
+
+* added note feature and fix other bugs ([aa90b49](https://github.com/Womby-Project/obgyn-admin/commit/aa90b49b0710dca3affc01226ea4bd410ec7b925))
+
 ## [1.3.5](https://github.com/Womby-Project/obgyn-admin/compare/v1.3.4...v1.3.5) (2025-10-04)
 
 
