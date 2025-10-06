@@ -54,6 +54,7 @@ type Patient = {
   pregnancy_weeks: number | null;
   maternalInsight: MaternalInsight;
   trimester: string;
+  doctors_note?: string | null; // NEW
 };
 
 // ------------------- Helpers -------------------
@@ -75,23 +76,21 @@ function capitalize(str?: string | null): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-/**
- * Map raw risk levels coming from DB to badge variants you actually have.
- */
+/** Map risk → badge variant */
 const riskToVariant = (
   raw?: string | null
 ): VariantProps<typeof badgeVariants>["variant"] => {
   const s = (raw ?? "").toString().trim().toLowerCase();
   switch (s) {
     case "low":
-      return "success" as any;      // green
+      return "success" as any;
     case "medium":
     case "moderate":
-      return "warning" as any;      // yellow
+      return "warning" as any;
     case "high":
-      return "destructive" as any;  // red
+      return "destructive" as any;
     default:
-      return "secondary";           // fallback
+      return "secondary";
   }
 };
 
@@ -105,6 +104,12 @@ export default function MaternalInsightsComponent() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // NEW: Doctor’s Note state
+  const [doctorsNote, setDoctorsNote] = useState<string>("");
+  const [shareWithPatient, setShareWithPatient] = useState<boolean>(false);
+  const [saving, setSaving] = useState<boolean>(false);
+  const [saveMsg, setSaveMsg] = useState<string>("");
+
   const searchParams = new URLSearchParams(location.search);
   const patientName = searchParams.get("name");
 
@@ -117,10 +122,10 @@ export default function MaternalInsightsComponent() {
         return;
       }
 
-      // Get patient basic info
+      // Get patient basic info + doctor’s note
       const { data: patientData, error: patientError } = await supabase
         .from("patient_users")
-        .select("id, first_name, last_name, risk_level, patient_type, pregnancy_weeks")
+        .select("id, first_name, last_name, risk_level, patient_type, pregnancy_weeks, doctors_note")
         .eq("id", patientId)
         .single();
 
@@ -141,10 +146,9 @@ export default function MaternalInsightsComponent() {
 
       if (aiError) {
         console.error("Error fetching AI insights:", aiError);
-        // ✅ changed: don't return; fall through to safe defaults
       }
 
-      // ✅ changed: build safe defaults if aiData is null (0 rows)
+      // Safe defaults
       const safeAi = aiData ?? {
         most_common_mood: { mood: "Neutral", duration: 0 },
         negative_mood_days: 0,
@@ -165,6 +169,7 @@ export default function MaternalInsightsComponent() {
         patient_type: patientData.patient_type ?? null,
         pregnancy_weeks: patientData.pregnancy_weeks ?? null,
         trimester: getTrimester(patientData.pregnancy_weeks),
+        doctors_note: patientData.doctors_note ?? "",
         maternalInsight: {
           mostCommonMood: {
             mood: safeAi.most_common_mood?.mood || "Neutral",
@@ -182,11 +187,67 @@ export default function MaternalInsightsComponent() {
       };
 
       setPatient(mappedPatient);
+      setDoctorsNote(mappedPatient.doctors_note || "");
       setLoading(false);
     };
 
     fetchPatientData();
   }, [patientId]);
+
+  /** Insert into public.notifications when sharing is checked */
+  const notifyPatient = async (pid: string) => {
+    // current user as "triggered_by"
+    const { data: u } = await supabase.auth.getUser();
+    const triggered_by = u?.user?.id ?? null;
+
+  
+ 
+    const title = "New Doctor’s Note";
+    const message = `Your obstetrician added a new note for you:\n\n"${doctorsNote.trim() || "No details provided."}"`;
+
+    const { error } = await supabase.from("notifications").insert({
+      recipient_id: pid, // patient_users.id == auth.users.id
+      recipient_role: "Patient",
+      triggered_by,
+      type: "system",
+      title,
+      message,
+      is_read: false,
+    });
+
+
+    if (error) console.error("Notification insert failed:", error);
+  };
+
+  const handleSaveNote = async () => {
+    if (!patientId) return;
+    setSaving(true);
+    setSaveMsg("");
+
+    // Save the note
+    const { error: updateError } = await supabase
+      .from("patient_users")
+      .update({
+        doctors_note: doctorsNote,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", patientId);
+
+    if (updateError) {
+      console.error(updateError);
+      setSaving(false);
+      setSaveMsg("Failed to save the note. Please try again.");
+      return;
+    }
+
+    // Notify patient if sharing enabled
+    if (shareWithPatient) {
+      await notifyPatient(patientId);
+    }
+
+    setSaving(false);
+    setSaveMsg(shareWithPatient ? "Note saved and shared with the patient." : "Note saved (not shared).");
+  };
 
   const getAlertColors = (type: string) => {
     if (type === "Mood Alert") {
@@ -283,6 +344,7 @@ export default function MaternalInsightsComponent() {
               </div>
 
               <CardContent>
+                {/* Top grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 ml-2 w-full mt-[-20px]">
                   {/* Mood card */}
                   <Card className="border border-gray-200 w-full min-h-[260px] bg-gray rounded-lg mt-5 flex flex-col justify-between">
@@ -510,7 +572,6 @@ export default function MaternalInsightsComponent() {
                           );
                         })
                       ) : (
-                        // ✅ added: empty state with same style family
                         <div className="flex items-center justify-center h-[320px]">
                           <p className="text-sm text-gray-500">No priority alerts found.</p>
                         </div>
@@ -605,6 +666,59 @@ export default function MaternalInsightsComponent() {
                     </Card>
                   </div>
                 </div>
+
+                {/* ---------------- Doctor's Note ---------------- */}
+                <div className="grid grid-cols-1 gap-4 mt-6 px-2 w-full">
+                  <Card className="border border-gray-200 w-full bg-gray rounded-lg flex flex-col p-4">
+                    <div className="flex items-center ">
+                      <Icon icon="ph:note-fill" className="w-6 h-6" style={{ color: "#E46B64" }} />
+                      <CardTitle className="ml-3 text-[20px] font-lato font-semibold" style={{ color: "#E46B64" }}>
+                        Doctor’s Note
+                      </CardTitle>
+                    </div>
+
+                    <CardDescription className="text-[16px] text-gray-600">
+                      Set personalized notes or actionable guidance for the patient based on consultation sessions and AI-generated insights.
+                    </CardDescription>
+
+                    <textarea
+                      className=" w-full min-h-[140px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] p-3 text-[14px] text-gray-800"
+                      placeholder="Enter your personalized notes about the patient here."
+                      value={doctorsNote}
+                      onChange={(e) => setDoctorsNote(e.target.value)}
+                    />
+
+                    <div className=" flex items-start gap-2">
+                      <input
+                        id="shareWithPatient"
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 accent-[#3B82F6] cursor-pointer"
+                        checked={shareWithPatient}
+                        onChange={(e) => setShareWithPatient(e.target.checked)}
+                      />
+                      <label htmlFor="shareWithPatient" className="text-[14px] text-gray-700">
+                        Share insights with the patient. This allows them to be notified of key health updates and suggested actions based on their recent journal data.
+                      </label>
+                    </div>
+
+                    <div className="mt-4 flex items-center gap-3">
+                      <button
+                        onClick={handleSaveNote}
+                        disabled={saving}
+                        className="inline-flex items-center gap-2 cursor-pointer rounded-md px-4 p text-white transition-colors disabled:opacity-70 h-10 w-27"
+                        style={{ backgroundColor: "#E46B64" }}
+                        onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#E46B64")}
+                        onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#E46B64")}
+                      >
+                        <Icon icon="mynaui:send" className="w-5 h-5" />
+                        {saving ? "Saving..." : "Save"}
+                      </button>
+
+                      {saveMsg && <span className="text-[13px] text-gray-600">{saveMsg}</span>}
+                    </div>
+                  </Card>
+                </div>
+                {/* -------------- End Doctor's Note -------------- */}
               </CardContent>
             </Card>
           </div>

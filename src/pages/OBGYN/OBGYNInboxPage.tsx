@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import SearchIcon from "@mui/icons-material/Search";
 import rebeca from "@/assets/rebeca.png";
 import CallReceivedIcon from "@mui/icons-material/CallReceived";
@@ -8,7 +8,7 @@ import MoreHorizOutlinedIcon from "@mui/icons-material/MoreHorizOutlined";
 import AttachFileOutlinedIcon from "@mui/icons-material/AttachFileOutlined";
 import InsertPhotoOutlinedIcon from "@mui/icons-material/InsertPhotoOutlined";
 import { supabase } from "@/lib/supabaseClient";
-import  VideoCall  from "@/components/modals/videoCall";
+import VideoCall from "@/components/modals/videoCall";
 import type { User } from "@supabase/supabase-js";
 
 import { useParams, useLocation } from "react-router-dom";
@@ -33,7 +33,7 @@ type ChatMessage = {
   seen?: boolean;
   seen_at?: string | null;
   message_type?: "text" | "image" | "file" | "call";
-  file_url?: string | null; // ✅ add support for attachments
+  file_url?: string | null;
 };
 
 type ChatRoom = {
@@ -51,7 +51,7 @@ type ChatPreview = {
   message: string;
   time: string;
   hasUnseen: boolean;
-  participants: string[]
+  participants: string[];
 };
 
 type TypingStatus = {
@@ -60,6 +60,17 @@ type TypingStatus = {
   updated_at: string;
 };
 
+// For entitlement checks
+type AppointmentRow = {
+  id: string;
+  call_seconds_limit: number | null;
+  call_seconds_used: number | null;
+  chat_messages_limit: number | null;
+  chat_messages_used: number | null;
+  status: string;
+  completed_manually: boolean | null;
+  appointment_datetime?: string | null;
+};
 
 // ------------------ COMPONENT ------------------
 
@@ -81,7 +92,6 @@ export default function InboxPage() {
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
 
-
   // ✅ Get logged-in user
   useEffect(() => {
     const fetchUser = async () => {
@@ -100,21 +110,47 @@ export default function InboxPage() {
   useEffect(() => {
     if (!patientId || !currentUser || chats.length === 0) return;
 
-    // Find the chat where this patient is a participant
     const targetChat = chats.find((c) => c.participants.includes(patientId));
-
     if (targetChat) {
       setSelectedChatId(targetChat.id);
-
-      // ✅ Auto open call if flag is set
-      // ✅ Auto open call if flag is set
       if (autoCall) {
-        handleStartCall(targetChat.id); // 🔥 use the same popup logic
+        handleStartCall(targetChat.id);
       }
-
     }
   }, [patientId, chats, autoCall, currentUser]);
 
+  /**
+   * 🔎 Helper: find the most recent active appointment between current OB-GYN and patient
+   * - not Done/Cancelled
+   * - not completed_manually
+   * - for calls: remaining call seconds > 0
+   * - for chat: remaining chat messages > 0
+   */
+  const fetchActiveAppointmentFor = useCallback(
+    async (patientUserId: string): Promise<AppointmentRow | null> => {
+      if (!currentUser?.id) return null;
+      const { data, error } = await supabase
+        .from("appointments")
+        .select(
+          "id, call_seconds_limit, call_seconds_used, chat_messages_limit, chat_messages_used, status, completed_manually, appointment_datetime"
+        )
+        .eq("patient_id", patientUserId)
+        .eq("obgyn_id", currentUser.id)
+        .not("status", "in", "(Done,Cancelled)")
+        .order("appointment_datetime", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Active appointment lookup failed:", error.message);
+        return null;
+      }
+      if (!data) return null;
+
+      return data as AppointmentRow;
+    },
+    [currentUser?.id]
+  );
 
   const handleStartCall = async (chatId: string) => {
     if (!currentUser) return;
@@ -125,7 +161,22 @@ export default function InboxPage() {
     const calleeId = chat.participants.find((p) => p !== currentUser.id);
     if (!calleeId) return;
 
+    // ✅ NEW: enforce booking before creating the call row
     try {
+      const appt = await fetchActiveAppointmentFor(calleeId);
+      const remainingCall =
+        Math.max(
+          (appt?.call_seconds_limit ?? 0) - (appt?.call_seconds_used ?? 0),
+          0
+        ) || 0;
+
+      if (!appt || appt.completed_manually || remainingCall <= 0) {
+        alert(
+          "No active appointment with remaining call time. Please ask the patient to rebook."
+        );
+        return;
+      }
+
       // 1) Reuse any active call row for this room
       const { data: existing, error: exErr } = await supabase
         .from("chat_calls")
@@ -142,7 +193,7 @@ export default function InboxPage() {
 
       let callId = existing?.id ?? null;
 
-      // 2) Create a new row if none active
+      // 2) Create a new row if none active — ✅ tie to appointment
       if (!callId) {
         const { data: inserted, error: insErr } = await supabase
           .from("chat_calls")
@@ -153,6 +204,7 @@ export default function InboxPage() {
               callee_id: calleeId,
               started_at: new Date().toISOString(),
               status: "ringing",
+              appointment_id: appt.id, // 🔗 critical for DB triggers
             },
           ])
           .select("id")
@@ -179,7 +231,7 @@ export default function InboxPage() {
 
       const url =
         `/video-call/${chatId}` +
-        `?callId=${encodeURIComponent(callId)}` +                 // <-- important
+        `?callId=${encodeURIComponent(callId)}` +
         `&callerName=${encodeURIComponent(callerName)}` +
         `&calleeName=${encodeURIComponent(calleeName)}` +
         `&profileUrl=${encodeURIComponent(profileUrl)}` +
@@ -197,23 +249,12 @@ export default function InboxPage() {
     }
   };
 
-
-
-
-
-
-
-
-  // ✅ Fetch chats
+  // ✅ Fetch calls
   useEffect(() => {
     if (!currentUser) return;
 
-
     const fetchCalls = async () => {
-      if (!currentUser) return;
-
       try {
-        // Step 1: Get all calls where the user is caller or callee
         const { data: callData, error } = await supabase
           .from("chat_calls")
           .select("*")
@@ -223,7 +264,6 @@ export default function InboxPage() {
         if (error) throw error;
         if (!callData) return;
 
-        // Step 2: Collect the other user IDs
         const otherUserIds = [
           ...new Set(
             callData.map((c) =>
@@ -232,7 +272,6 @@ export default function InboxPage() {
           ),
         ];
 
-        // Step 3: Fetch patient profiles only
         const { data: patientProfiles } = await supabase
           .from("patient_users")
           .select("id, first_name, last_name, profile_avatar_url")
@@ -250,7 +289,6 @@ export default function InboxPage() {
           };
         });
 
-        // Step 4: Attach profile info + formatted time to each call
         const callsWithProfiles = callData.map((c) => {
           const otherId =
             c.caller_id === currentUser.id ? c.callee_id : c.caller_id;
@@ -278,7 +316,6 @@ export default function InboxPage() {
         console.error("Error fetching calls:", err);
       }
     };
-
 
     const fetchChats = async () => {
       try {
@@ -315,38 +352,35 @@ export default function InboxPage() {
 
             const latestMsg = room.chat_messages?.length
               ? [...room.chat_messages].sort(
-                (a, b) =>
-                  new Date(b.created_at).getTime() -
-                  new Date(a.created_at).getTime()
-              )[0]
+                  (a, b) =>
+                    new Date(b.created_at).getTime() -
+                    new Date(a.created_at).getTime()
+                )[0]
               : null;
 
             const hasUnseen =
               latestMsg &&
               latestMsg.sender_id !== currentUser.id &&
-              !latestMsg.seen_at
-
+              !latestMsg.seen_at;
 
             return {
               id: room.id,
               name: other
                 ? `${other.first_name ?? ""} ${other.last_name ?? ""}`.trim()
                 : "Unknown",
-              img: other?.profile_avatar_url || rebeca,
+              img: other?.profile_avatar_url || (rebeca as any),
               message: latestMsg?.message || "No messages yet",
               time: latestMsg
                 ? new Date(latestMsg.created_at).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
                 : "",
               hasUnseen: Boolean(hasUnseen),
-              participants: [
-                room.patient?.id,
-                room.obgyn?.id,
-              ].filter(Boolean) as string[], // 👈 ensure no nulls
+              participants: [room.patient?.id, room.obgyn?.id].filter(
+                Boolean
+              ) as string[],
             };
-
           }) || [];
 
         setChats(formattedChats);
@@ -356,10 +390,8 @@ export default function InboxPage() {
     };
 
     fetchChats();
-    fetchCalls()
+    fetchCalls();
   }, [currentUser]);
-
-
 
   const handleUnsendMessage = async (msgId: string, roomId: string) => {
     try {
@@ -367,11 +399,10 @@ export default function InboxPage() {
         .from("chat_messages")
         .update({ status: "unsent" })
         .eq("id", msgId)
-        .select(); // ✅ return the updated row
+        .select();
 
       if (error) throw error;
 
-      // Optimistically update local state
       setMessages((prev) => ({
         ...prev,
         [roomId]: (prev[roomId] || []).map((m) =>
@@ -383,15 +414,6 @@ export default function InboxPage() {
       alert("Failed to unsend message. You can only delete your own messages.");
     }
   };
-
-
-
-
-
-
-
-
-
 
   useEffect(() => {
     if (!currentUser) return;
@@ -408,9 +430,8 @@ export default function InboxPage() {
         },
         (payload) => {
           const call = payload.new;
-          console.log("Incoming call:", call);
           setActiveRoomId(call.room_id);
-          setActiveCallId(call.id);      // ✅ MISSING
+          setActiveCallId(call.id);
           setIsCalling(true);
         }
       )
@@ -420,10 +441,6 @@ export default function InboxPage() {
       supabase.removeChannel(channel);
     };
   }, [currentUser]);
-
-
-
-
 
   // ✅ Mark messages as seen
   useEffect(() => {
@@ -438,7 +455,7 @@ export default function InboxPage() {
         })
         .eq("room_id", selectedChatId)
         .neq("sender_id", currentUser.id)
-        .select(); // ✅ RETURN updated rows
+        .select();
 
       if (error) {
         console.error("❌ Error marking seen:", error.message);
@@ -446,7 +463,6 @@ export default function InboxPage() {
       }
 
       if (data?.length) {
-        // ✅ merge updates into messages state
         setMessages((prev) => ({
           ...prev,
           [selectedChatId]: (prev[selectedChatId] || []).map((m) => {
@@ -468,10 +484,11 @@ export default function InboxPage() {
       setLoadingMessages(true);
       const { data, error } = await supabase
         .from("chat_messages")
-        .select("id, sender_id, room_id, message, created_at, seen, seen_at, message_type, file_url, status") // ✅ include these
+        .select(
+          "id, sender_id, room_id, message, created_at, seen, seen_at, message_type, file_url, status"
+        )
         .eq("room_id", selectedChatId)
         .order("created_at", { ascending: true });
-
 
       setLoadingMessages(false);
 
@@ -485,7 +502,6 @@ export default function InboxPage() {
 
     fetchMessages();
 
-    // Live subscription
     const channel = supabase
       .channel(`chat-${selectedChatId}`)
       .on(
@@ -513,7 +529,6 @@ export default function InboxPage() {
               ),
             }));
           }
-
         }
       )
       .subscribe();
@@ -548,8 +563,7 @@ export default function InboxPage() {
     };
   }, [selectedChatId]);
 
-  // ✅ Send message
-  // ✅ Send message (text only)
+  // ✅ Send message (text only) — attach appointment_id when available
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedChatId || !currentUser) return;
 
@@ -564,7 +578,7 @@ export default function InboxPage() {
       seen_at: null,
       message_type: "text",
       room_id: "",
-      status: ""
+      status: "",
     };
     setMessages((prev) => ({
       ...prev,
@@ -572,17 +586,39 @@ export default function InboxPage() {
     }));
     setNewMessage("");
 
+    // 🔗 Try to attach appointment_id so DB enforces chat quota specific to the booking
+    let appointment_id: string | undefined;
+    try {
+      const chat = chats.find((c) => c.id === selectedChatId);
+      const otherId = chat?.participants.find((p) => p !== currentUser.id);
+      if (otherId) {
+        const appt = await fetchActiveAppointmentFor(otherId);
+        const remainingChats =
+          Math.max(
+            (appt?.chat_messages_limit ?? 0) - (appt?.chat_messages_used ?? 0),
+            0
+          ) || 0;
+        if (appt && !appt.completed_manually && remainingChats > 0) {
+          appointment_id = appt.id;
+        }
+      }
+    } catch (e) {
+      // ignore; DB triggers will still enforce limits
+    }
+
     const { error } = await supabase.from("chat_messages").insert([
       {
         room_id: selectedChatId,
         sender_id: currentUser.id,
         message: text,
         message_type: "text",
+        ...(appointment_id ? { appointment_id } : {}),
       },
     ]);
 
     if (error) {
-      console.error("❌ Error sending message:", error.message);
+      // DB trigger might say "Chat quota exhausted; please rebook"
+      alert(error.message);
     }
   };
 
@@ -600,7 +636,6 @@ export default function InboxPage() {
     );
   };
 
-
   // ✅ File upload handler
   const handleUpload = async (file: File, type: "image" | "file") => {
     if (!file || !selectedChatId || !currentUser) return;
@@ -608,7 +643,6 @@ export default function InboxPage() {
     const fileExt = file.name.split(".").pop();
     const filePath = `${selectedChatId}/${Date.now()}.${fileExt}`;
 
-    // Upload to Supabase storage (make sure you have a `chat-attachments` bucket)
     const { error: uploadError } = await supabase.storage
       .from("chat_attachments")
       .upload(filePath, file);
@@ -624,7 +658,6 @@ export default function InboxPage() {
 
     const publicUrl = urlData.publicUrl;
 
-    // Insert as a chat message
     const { error: insertError } = await supabase.from("chat_messages").insert([
       {
         room_id: selectedChatId,
@@ -639,10 +672,6 @@ export default function InboxPage() {
       console.error("❌ Error sending file message:", insertError.message);
     }
   };
-
-
-
-
 
   const filteredChats = chats.filter((chat) =>
     chat.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -672,8 +701,9 @@ export default function InboxPage() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab as "Chats" | "Calls")}
-              className={`w-1/2 pb-2 text-[15px] font-bold transition-colors ${activeTab === tab ? "text-gray-700" : "text-gray-500"
-                }`}
+              className={`w-1/2 pb-2 text-[15px] font-bold transition-colors ${
+                activeTab === tab ? "text-gray-700" : "text-gray-500"
+              }`}
             >
               {tab}
             </button>
@@ -691,12 +721,13 @@ export default function InboxPage() {
               <div
                 key={chat.id}
                 onClick={() => setSelectedChatId(chat.id)}
-                className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-100 transition ${selectedChatId === chat.id
-                  ? "bg-gray-200"
-                  : chat.hasUnseen
+                className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-gray-100 transition ${
+                  selectedChatId === chat.id
+                    ? "bg-gray-200"
+                    : chat.hasUnseen
                     ? "bg-blue-50"
                     : ""
-                  }`}
+                }`}
               >
                 <img
                   src={chat.img}
@@ -708,8 +739,11 @@ export default function InboxPage() {
                     {chat.name}
                   </div>
                   <div
-                    className={`text-xs truncate ${chat.hasUnseen ? "text-blue-600 font-semibold" : "text-gray-500"
-                      }`}
+                    className={`text-xs truncate ${
+                      chat.hasUnseen
+                        ? "text-blue-600 font-semibold"
+                        : "text-gray-500"
+                    }`}
                   >
                     {chat.message}
                   </div>
@@ -750,11 +784,7 @@ export default function InboxPage() {
                     </div>
                   </div>
                 </div>
-                <VideocamOutlinedIcon
-
-                />
-
-
+                <VideocamOutlinedIcon />
               </div>
             ))}
         </div>
@@ -777,8 +807,8 @@ export default function InboxPage() {
                     {selectedChat.name}
                   </div>
                   {typingStatus &&
-                    typingStatus.is_typing &&
-                    typingStatus.user_id !== currentUser?.id ? (
+                  typingStatus.is_typing &&
+                  typingStatus.user_id !== currentUser?.id ? (
                     <div className="text-xs text-blue-500 animate-pulse">
                       typing...
                     </div>
@@ -787,11 +817,11 @@ export default function InboxPage() {
                       Last active{" "}
                       {typingStatus?.updated_at
                         ? new Date(
-                          typingStatus.updated_at
-                        ).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
+                            typingStatus.updated_at
+                          ).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
                         : "recently"}
                     </div>
                   )}
@@ -802,13 +832,11 @@ export default function InboxPage() {
                   onClick={() => handleStartCall(selectedChat.id)}
                   className="cursor-pointer"
                 />
-
-
                 <MoreHorizOutlinedIcon />
               </div>
             </div>
 
-
+            {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
               {loadingMessages ? (
                 <div className="text-gray-400 text-sm">Loading messages...</div>
@@ -821,13 +849,11 @@ export default function InboxPage() {
                   const time = new Date(msg.created_at);
                   const prev = idx > 0 ? new Date(arr[idx - 1].created_at) : null;
 
-                  // ⏱️ Insert a date/time separator if >30min gap or new day
                   const showSeparator =
                     !prev ||
                     time.toDateString() !== prev.toDateString() ||
                     (time.getTime() - prev.getTime()) / (1000 * 60) > 30;
 
-                  // 🎥 If message is call log type
                   if (msg.message_type === "call") {
                     return (
                       <div key={msg.id} className="flex justify-center my-4">
@@ -835,7 +861,9 @@ export default function InboxPage() {
                           {msg.message.includes("missed") ? (
                             <span className="text-red-500">❌ Missed Call</span>
                           ) : (
-                            <span className="text-green-600">📞 Video Call Ended</span>
+                            <span className="text-green-600">
+                              📞 Video Call Ended
+                            </span>
                           )}
                           <div className="text-[10px] text-gray-400 mt-1">
                             {time.toLocaleString()}
@@ -856,10 +884,10 @@ export default function InboxPage() {
                       )}
 
                       <div
-                        className={`group flex ${isFromMe ? "justify-end" : "justify-start"
-                          } items-start gap-3`}
+                        className={`group flex ${
+                          isFromMe ? "justify-end" : "justify-start"
+                        } items-start gap-3`}
                       >
-                        {/* Avatar only for other user */}
                         {!isFromMe && (
                           <img
                             src={selectedChat.img}
@@ -869,7 +897,6 @@ export default function InboxPage() {
                         )}
 
                         <div className="flex flex-col max-w-xs relative">
-                          {/* Message bubble */}
                           <div
                             className={`px-4 py-2 rounded-2xl break-words shadow-sm animate-fadeIn relative ${bubbleColor}`}
                           >
@@ -885,7 +912,10 @@ export default function InboxPage() {
                                   src={msg.file_url ?? undefined}
                                   alt="uploaded"
                                   className="max-w-[200px] max-h-[200px] rounded-lg object-cover cursor-pointer"
-                                  onClick={() => msg.file_url && window.open(msg.file_url, "_blank")}
+                                  onClick={() =>
+                                    msg.file_url &&
+                                    window.open(msg.file_url, "_blank")
+                                  }
                                 />
                               ) : (
                                 <a
@@ -905,45 +935,46 @@ export default function InboxPage() {
                             )}
                           </div>
 
-
                           {msg.status === "active" && (
                             <div
-                              className={`absolute top-1/2 -translate-y-1/2 ${isFromMe ? "right-full mr-1" : "left-full ml-1"
-                                } hidden group-hover:flex items-center`}
+                              className={`absolute top-1/2 -translate-y-1/2 ${
+                                isFromMe ? "right-full mr-1" : "left-full ml-1"
+                              } hidden group-hover:flex items-center`}
                             >
                               <div className="relative group/menu">
                                 <MoreHorizOutlinedIcon className="cursor-pointer text-gray-500 hover:text-[#E46B64]" />
-
-                                {/* Dropdown bubble */}
                                 <div
                                   className={`absolute mt-2 w-36 rounded-2xl shadow-md border border-gray-100
-          bg-white/95 backdrop-blur-sm z-50
-          ${isFromMe ? "right-0 origin-top-right" : "left-0 origin-top-left"}
-          after:content-[''] after:absolute after:w-0 after:h-0 
-          after:border-8 after:border-transparent after:top-0
-          ${isFromMe
+                                  bg-white/95 backdrop-blur-sm z-50
+                                  ${isFromMe ? "right-0 origin-top-right" : "left-0 origin-top-left"}
+                                  after:content-[''] after:absolute after:w-0 after:h-0 
+                                  after:border-8 after:border-transparent after:top-0
+                                  ${
+                                    isFromMe
                                       ? "after:right-4 after:border-b-white after:-translate-y-full"
-                                      : "after:left-4 after:border-b-white after:-translate-y-full"}
-          opacity-0 scale-95 pointer-events-none
-          group-hover/menu:opacity-100 group-hover/menu:scale-100 group-hover/menu:pointer-events-auto
-          transition-all duration-200 ease-out`}
+                                      : "after:left-4 after:border-b-white after:-translate-y-full"
+                                  }
+                                  opacity-0 scale-95 pointer-events-none
+                                  group-hover/menu:opacity-100 group-hover/menu:scale-100 group-hover/menu:pointer-events-auto
+                                  transition-all duration-200 ease-out`}
                                 >
                                   {isFromMe && (
                                     <button
-                                      onClick={() => handleUnsendMessage(msg.id, selectedChat.id)}
+                                      onClick={() =>
+                                        handleUnsendMessage(msg.id, selectedChat.id)
+                                      }
                                       className="w-full text-left px-4 py-2 text-sm text-gray-700 
-    hover:bg-[#E46B64]/10 hover:text-[#E46B64] 
-    transition-colors rounded-t-2xl"
+                                      hover:bg-[#E46B64]/10 hover:text-[#E46B64] 
+                                      transition-colors rounded-t-2xl"
                                     >
                                       Unsend
                                     </button>
-
                                   )}
                                   <button
                                     onClick={() => console.log("report", msg.id)}
                                     className={`w-full text-left px-4 py-2 text-sm text-gray-700 
-            hover:bg-[#E46B64]/10 hover:text-[#E46B64] 
-            transition-colors ${isFromMe ? "rounded-b-2xl" : "rounded-2xl"}`}
+                                    hover:bg-[#E46B64]/10 hover:text-[#E46B64] 
+                                    transition-colors ${isFromMe ? "rounded-b-2xl" : "rounded-2xl"}`}
                                   >
                                     Report
                                   </button>
@@ -951,26 +982,24 @@ export default function InboxPage() {
                               </div>
                             </div>
                           )}
-
                         </div>
                       </div>
                     </div>
-
                   );
                 })
               )}
             </div>
 
-
             {/* Input */}
             <div className="border-t border-gray-300 px-4 py-3 flex items-center gap-3">
-              {/* File upload buttons */}
               <label className="cursor-pointer">
                 <AttachFileOutlinedIcon className="text-gray-400" />
                 <input
                   type="file"
                   hidden
-                  onChange={(e) => e.target.files && handleUpload(e.target.files[0], "file")}
+                  onChange={(e) =>
+                    e.target.files && handleUpload(e.target.files[0], "file")
+                  }
                 />
               </label>
               <label className="cursor-pointer">
@@ -979,7 +1008,9 @@ export default function InboxPage() {
                   type="file"
                   accept="image/*"
                   hidden
-                  onChange={(e) => e.target.files && handleUpload(e.target.files[0], "image")}
+                  onChange={(e) =>
+                    e.target.files && handleUpload(e.target.files[0], "image")
+                  }
                 />
               </label>
 
@@ -1002,15 +1033,13 @@ export default function InboxPage() {
                 Send
               </button>
             </div>
-
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400">
             Select a chat to start messaging
           </div>
-        )
-        }
-      </div >
+        )}
+      </div>
 
       {isCalling && activeRoomId && activeCallId && (
         <div className="fixed bottom-4 right-4 w-[400px] h-[300px] bg-white shadow-lg rounded-2xl z-50 border overflow-hidden">
@@ -1019,7 +1048,7 @@ export default function InboxPage() {
 
             return (
               <VideoCall
-                callId={activeCallId}                 // ✅ now exists on the component
+                callId={activeCallId}
                 roomId={activeRoomId}
                 onClose={() => {
                   setIsCalling(false);
@@ -1034,12 +1063,6 @@ export default function InboxPage() {
           })()}
         </div>
       )}
-
-
-
-
-    </div >
-
-
+    </div>
   );
 }
