@@ -1,3 +1,15 @@
+# [1.5.0](https://github.com/Womby-Project/obgyn-admin/compare/v1.4.0...v1.5.0) (2025-10-07)
+
+
+### Bug Fixes
+
+* Adding article feature in OBGYN ([122ee57](https://github.com/Womby-Project/obgyn-admin/commit/122ee57ed5e63512d3b7e2e1926993b3f544ff75))
+
+
+### Features
+
+* adding article feature ([49a0423](https://github.com/Womby-Project/obgyn-admin/commit/49a0423c037cd340bfd313552cedf59834454811))
+
 # [1.4.0](https://github.com/Womby-Project/obgyn-admin/compare/v1.3.5...v1.4.0) (2025-10-06)
 
 
