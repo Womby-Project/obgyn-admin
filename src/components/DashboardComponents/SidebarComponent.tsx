@@ -9,6 +9,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import PersonSearchOutlinedIcon from "@mui/icons-material/PersonSearchOutlined";
 import { supabase } from "@/lib/supabaseClient";
 import packageJson from "../../../package.json"
+import { Icon } from "@iconify/react";
 
 type UserData = {
   name: string;
@@ -58,6 +59,11 @@ export default function Sidebar({ user }: SidebarProps) {
               <>
                 <SidebarLink icon={<HomeIcon fontSize="medium" />} text="Dashboard" to="/dashboard" />
                 <SidebarLink icon={<QuestionAnswerIcon fontSize="medium" />} text="Inbox" to="/inbox" />
+                <SidebarLink
+                  icon={<Icon icon="material-symbols:library-books-rounded" width={20} height={20} />}
+                  text="Article"
+                  to="/articlepage"
+                />
               </>
             )}
           </nav>
@@ -119,10 +125,10 @@ export default function Sidebar({ user }: SidebarProps) {
 
 
         {/* Footer Section */}
-          <div className=" text-center text-xs text-gray-400">
-            <p>v{packageJson.version}</p>
-            <p>© {new Date().getFullYear()} Wombly. All rights reserved.</p>
-          </div>
+        <div className=" text-center text-xs text-gray-400">
+          <p>v{packageJson.version}</p>
+          <p>© {new Date().getFullYear()} Wombly. All rights reserved.</p>
+        </div>
 
       </div>
     </aside>

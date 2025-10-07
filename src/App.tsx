@@ -24,13 +24,14 @@ import SecretaryAppointmentDirectory from "@/pages/SECRETARY/SecretaryAppointmen
 import SecretarySettings from '@/pages/SECRETARY/SecretarySettingsLayout';
 import SecretaryPatientDirectory from '@/pages/SECRETARY/SecretaryPatientDirectory'
 import VideoCall from "@/pages/OBGYN/VideoCallpage";
+import ArticlePage from '@/pages/OBGYN/OBGYNArticlePage';
 
 
 // 
 export default function App() {
   return (
     <Routes>
- 
+
 
       {/* Public */}
       <Route
@@ -92,6 +93,13 @@ export default function App() {
       {/* Protected - OBGYN */}
       <Route element={<ProtectedLayout allowedRoles={["obgyn"]} />}>
         <Route element={<DashboardLayout />}>
+
+          <Route path="/articlepage"
+            element={
+              <PageTitle title="Article Page - OBGYN">
+                <ArticlePage />
+              </PageTitle>
+            } />
 
           {/* Dashboard */}
           <Route
@@ -192,6 +200,8 @@ export default function App() {
             }
           />
         </Route>
+
+
       </Route>
 
 
