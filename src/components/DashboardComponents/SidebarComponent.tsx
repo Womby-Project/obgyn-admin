@@ -61,7 +61,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 <SidebarLink icon={<QuestionAnswerIcon fontSize="medium" />} text="Inbox" to="/inbox" />
                 <SidebarLink
                   icon={<Icon icon="material-symbols:library-books-rounded" width={20} height={20} />}
-                  text="Article"
+                  text="Articles"
                   to="/articlepage"
                 />
               </>
