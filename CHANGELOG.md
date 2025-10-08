@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/Womby-Project/obgyn-admin/compare/v1.5.0...v1.5.1) (2025-10-08)
+
+
+### Bug Fixes
+
+* Adjusted DirectoryInsightCOmponent ([90effa9](https://github.com/Womby-Project/obgyn-admin/commit/90effa98f54ee148f0bb13abdda2fa0dbd883aa5))
+
 # [1.5.0](https://github.com/Womby-Project/obgyn-admin/compare/v1.4.0...v1.5.0) (2025-10-07)
 
 
