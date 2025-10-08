@@ -54,7 +54,7 @@ type Patient = {
   pregnancy_weeks: number | null;
   maternalInsight: MaternalInsight;
   trimester: string;
-  doctors_note?: string | null; // NEW
+  doctors_note?: string | null;
 };
 
 // ------------------- Helpers -------------------
@@ -104,11 +104,15 @@ export default function MaternalInsightsComponent() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // NEW: Doctor’s Note state
+  // Doctor’s Note state
   const [doctorsNote, setDoctorsNote] = useState<string>("");
   const [shareWithPatient, setShareWithPatient] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [saveMsg, setSaveMsg] = useState<string>("");
+
+  // (Optional) show which weekly window we're displaying
+  const [weekStart, setWeekStart] = useState<string | null>(null);
+  const [weekEnd, setWeekEnd] = useState<string | null>(null);
 
   const searchParams = new URLSearchParams(location.search);
   const patientName = searchParams.get("name");
@@ -122,7 +126,7 @@ export default function MaternalInsightsComponent() {
         return;
       }
 
-      // Get patient basic info + doctor’s note
+      // 1) Get patient basic info + doctor’s note
       const { data: patientData, error: patientError } = await supabase
         .from("patient_users")
         .select("id, first_name, last_name, risk_level, patient_type, pregnancy_weeks, doctors_note")
@@ -135,21 +139,25 @@ export default function MaternalInsightsComponent() {
         return;
       }
 
-      // Get latest AI insights
-      const { data: aiData, error: aiError } = await supabase
-        .from("ai_insights")
-        .select("*")
+      // 2) Get latest WEEKLY insights (NOTE: switched from ai_insights → ai_weekly_insights)
+      const { data: weekly, error: weeklyErr } = await supabase
+        .from("ai_weekly_insights")
+        .select(
+          "week_start, week_end, most_common_mood, negative_mood_days, most_frequent_symptoms, severe_symptoms, activities, activity_frequency, priority_alerts, key_insights, recommendations"
+        )
         .eq("patient_id", patientId)
-        .order("created_at", { ascending: false })
+        .order("week_start", { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (aiError) {
-        console.error("Error fetching AI insights:", aiError);
+      if (weeklyErr) {
+        console.error("Error fetching weekly insights:", weeklyErr);
       }
 
-      // Safe defaults
-      const safeAi = aiData ?? {
+      // Safe defaults if there's no weekly insight yet
+      const safeAi = weekly ?? {
+        week_start: null,
+        week_end: null,
         most_common_mood: { mood: "Neutral", duration: 0 },
         negative_mood_days: 0,
         most_frequent_symptoms: [],
@@ -161,11 +169,14 @@ export default function MaternalInsightsComponent() {
         recommendations: [],
       };
 
+      setWeekStart(safeAi.week_start);
+      setWeekEnd(safeAi.week_end);
+
       const mappedPatient: Patient = {
         id: patientData.id,
         first_name: patientData.first_name ?? "",
         last_name: patientData.last_name ?? "",
-        risk_level: patientData.risk_level ?? null,
+        risk_level: patientData.risk_level ?? null, // kept from patient_users (weekly job updates this)
         patient_type: patientData.patient_type ?? null,
         pregnancy_weeks: patientData.pregnancy_weeks ?? null,
         trimester: getTrimester(patientData.pregnancy_weeks),
@@ -196,17 +207,14 @@ export default function MaternalInsightsComponent() {
 
   /** Insert into public.notifications when sharing is checked */
   const notifyPatient = async (pid: string) => {
-    // current user as "triggered_by"
     const { data: u } = await supabase.auth.getUser();
     const triggered_by = u?.user?.id ?? null;
 
-  
- 
     const title = "New Doctor’s Note";
     const message = `Your obstetrician added a new note for you:\n\n"${doctorsNote.trim() || "No details provided."}"`;
 
     const { error } = await supabase.from("notifications").insert({
-      recipient_id: pid, // patient_users.id == auth.users.id
+      recipient_id: pid,
       recipient_role: "Patient",
       triggered_by,
       type: "system",
@@ -214,7 +222,6 @@ export default function MaternalInsightsComponent() {
       message,
       is_read: false,
     });
-
 
     if (error) console.error("Notification insert failed:", error);
   };
@@ -224,7 +231,6 @@ export default function MaternalInsightsComponent() {
     setSaving(true);
     setSaveMsg("");
 
-    // Save the note
     const { error: updateError } = await supabase
       .from("patient_users")
       .update({
@@ -240,7 +246,6 @@ export default function MaternalInsightsComponent() {
       return;
     }
 
-    // Notify patient if sharing enabled
     if (shareWithPatient) {
       await notifyPatient(patientId);
     }
@@ -321,6 +326,13 @@ export default function MaternalInsightsComponent() {
                     </BreadcrumbList>
                   </Breadcrumb>
                 </div>
+                {/* Optional: show which week this insight covers */}
+                {weekStart && weekEnd && (
+                  <CardDescription className="mt-2 text-sm text-gray-600">
+                    Insight window: {new Date(weekStart).toLocaleDateString()} –{" "}
+                    {new Date(weekEnd).toLocaleDateString()}
+                  </CardDescription>
+                )}
               </CardHeader>
 
               <div className="ml-3 p-3">
@@ -682,7 +694,7 @@ export default function MaternalInsightsComponent() {
                     </CardDescription>
 
                     <textarea
-                      className=" w-full min-h-[140px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] p-3 text-[14px] text-gray-800"
+                      className=" w-full min-h[140px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] p-3 text-[14px] text-gray-800"
                       placeholder="Enter your personalized notes about the patient here."
                       value={doctorsNote}
                       onChange={(e) => setDoctorsNote(e.target.value)}

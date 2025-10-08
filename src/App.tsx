@@ -99,7 +99,7 @@ export default function App() {
               <PageTitle title="Article Page - OBGYN">
                 <ArticlePage />
               </PageTitle>
-            } />
+            } />a
 
           {/* Dashboard */}
           <Route
