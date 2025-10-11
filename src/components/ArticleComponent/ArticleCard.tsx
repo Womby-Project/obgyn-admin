@@ -2,7 +2,7 @@
 
 // --- TYPE DEFINITION ---
 export interface Article {
-  id: number;
+  id: number;   
   title: string;
   description: string;
   imageUrl: string;
