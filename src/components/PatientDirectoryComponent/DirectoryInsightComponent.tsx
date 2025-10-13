@@ -440,7 +440,7 @@ export default function MaternalInsightsComponent() {
                     </p>
 
                     {patient.maternalInsight.mostFrequentSymptoms.length > 1 ? (
-                      <ul className="ml-8 mt-[-45px] list-disc text-[16px] font-lato text-gray-900">
+                      <ul className="ml-8 mt-[-20px] list-disc text-[16px] font-lato text-gray-900">
                         {patient.maternalInsight.mostFrequentSymptoms.map((item, index) => (
                           <li key={index}>
                             {item.symptom} <span className="text-gray-600">({item.days} days)</span>
