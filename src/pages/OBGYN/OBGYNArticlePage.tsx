@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import  { useState } from 'react';
 import ArticleHeader from '@/components/ArticleComponent/ArticleHeader';
 import ArticleTabs from '@/components/ArticleComponent/ArticleTabs';
 import AllArticlesContent from '@/components/ArticleComponent/AllArticlesContent';
