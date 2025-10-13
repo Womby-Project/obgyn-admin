@@ -1,3 +1,10 @@
+## [1.5.2](https://github.com/Womby-Project/obgyn-admin/compare/v1.5.1...v1.5.2) (2025-10-13)
+
+
+### Bug Fixes
+
+* Fixed some screens ([8deea61](https://github.com/Womby-Project/obgyn-admin/commit/8deea61a410d457688f6de5dbd5cc64cb2dda8b3))
+
 ## [1.5.1](https://github.com/Womby-Project/obgyn-admin/compare/v1.5.0...v1.5.1) (2025-10-08)
 
 
