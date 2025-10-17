@@ -1,3 +1,10 @@
+## [1.5.4](https://github.com/Womby-Project/obgyn-admin/compare/v1.5.3...v1.5.4) (2025-10-17)
+
+
+### Bug Fixes
+
+* working articles for obgyn ([ca534be](https://github.com/Womby-Project/obgyn-admin/commit/ca534beba42361c84c128b284f81bed551905be8))
+
 ## [1.5.3](https://github.com/Womby-Project/obgyn-admin/compare/v1.5.2...v1.5.3) (2025-10-13)
 
 
