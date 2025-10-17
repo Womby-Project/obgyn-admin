@@ -5,11 +5,11 @@ import AllArticlesContent from '@/components/ArticleComponent/AllArticlesContent
 import PostedByYouContent from '@/components/ArticleComponent/PostedByYouContent';
 import ArchiveContent from '@/components/ArticleComponent/ArchiveContent';
 import WriteArticlePage from '@/components/ArticleComponent/WriteArticle';
-import ArticleViewPage from '@/components/ArticleComponent/ArticleViewPage'; // Assuming ArticleViewPage is in the same directory
+import ArticleViewPage from '@/components/ArticleComponent/ArticleViewPage';
 
 // --- TYPE DEFINITION ---
 export interface Article {
-  id: number;
+  id: string;             // uuid
   title: string;
   description: string;
   imageUrl: string;
@@ -48,7 +48,6 @@ export default function OBGYNArticlePage() {
     }
   };
 
-  // --- CONDITIONAL RENDERING ---
   if (isWriting) return <WriteArticlePage onBack={() => setIsWriting(false)} />;
   if (selectedArticle) return <ArticleViewPage article={selectedArticle} onBack={handleBackToList} />;
 

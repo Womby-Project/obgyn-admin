@@ -1,4 +1,4 @@
-import React from 'react';
+
 import type { ArticleView } from '@/pages/OBGYN/OBGYNArticlePage';
 
 const tabs: ArticleView[] = ['All articles', 'Posted by You', 'Archive'];
