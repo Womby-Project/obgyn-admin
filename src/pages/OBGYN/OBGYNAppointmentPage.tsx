@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -17,7 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertTitle } from "@/components/ui/alert";
-
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import { Badge, badgeVariants } from "@/components/ui/badge";
 import {
@@ -37,17 +36,21 @@ import {
 import { HoverCard } from "@radix-ui/react-hover-card";
 import type { VariantProps } from "class-variance-authority";
 import { supabase } from "@/lib/supabaseClient";
-import RescheduleDialog from "@/components/modals/rescheduleModal"
-import FollowUpDialog from '@/components/modals/followupModal'
-import { toast } from "sonner"
-import { Toaster } from "@/components/ui/sonner"
+import RescheduleDialog from "@/components/modals/rescheduleModal";
+import FollowUpDialog from "@/components/modals/followupModal";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { useNavigate } from "react-router-dom";
 
-
-
 const itemsPerPage = 10;
-const capitalize = (str: string) =>
-  str.charAt(0).toUpperCase() + str.slice(1);
+const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
+
+// ---- Types from your schema ----
+type AppointmentFollowUpRow = {
+  id: string;
+  follow_up_datetime: string;
+  reason?: string | null; // schema uses "reason"
+};
 
 type AppointmentRow = {
   id: string;
@@ -59,16 +62,10 @@ type AppointmentRow = {
     first_name: string;
     last_name: string;
     pregnancy_weeks: number | null;
-    patient_type: string
+    patient_type: string | null;
   } | null;
-  appointment_followups: {
-    id: string;
-    follow_up_datetime: string;
-    notes?: string | null;
-  }[];
+  appointment_followups?: AppointmentFollowUpRow[];
 };
-
-
 
 type AppointmentUIRow = {
   id: string;
@@ -80,9 +77,17 @@ type AppointmentUIRow = {
   type: string;
   status: string;
   dateTime: Date; // real Date object for sorting
-  patientType: string
+  patientType: string | "-";
 };
 
+// ---- Allowed notification types per CHECK constraint ----
+type AllowedNotificationType =
+  | "appointment_update"
+  | "followup_reminder"
+  | "chat_message"
+  | "forum_interaction"
+  | "ai_alert"
+  | "system";
 
 export default function AppointmentPage() {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
@@ -98,16 +103,17 @@ export default function AppointmentPage() {
   const [openFollowUp, setOpenFollowUp] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentUIRow | null>(null);
 
-
-
-
-
+  // keep resolved obgynId for later inserts (works for secretary or OB-GYN)
+  const obgynIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const fetchAppointments = async () => {
       setLoading(true);
 
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
       if (userError || !user) {
         console.error("Error fetching user:", userError?.message);
         setLoading(false);
@@ -117,6 +123,7 @@ export default function AppointmentPage() {
       let obgynId: string | null = null;
 
       try {
+        // If secretary, derive their OB-GYN
         const { data: secUser } = await supabase
           .from("secretary_users")
           .select("obgyn_id")
@@ -126,6 +133,7 @@ export default function AppointmentPage() {
         if (secUser?.obgyn_id) {
           obgynId = secUser.obgyn_id;
         } else {
+          // else check if the user is OB-GYN
           const { data: obgynUser } = await supabase
             .from("obgyn_users")
             .select("id")
@@ -135,6 +143,8 @@ export default function AppointmentPage() {
           if (obgynUser) obgynId = obgynUser.id;
         }
 
+        obgynIdRef.current = obgynId;
+
         if (!obgynId) {
           setAppointments([]);
           setLoading(false);
@@ -143,36 +153,41 @@ export default function AppointmentPage() {
 
         const { data, error } = await supabase
           .from("appointments")
-          .select(`
-    id,
-    appointment_datetime,
-    status,
-    appointment_type,
-    patient:patient_users (
-      id,
-      first_name,
-      last_name,
-      pregnancy_weeks,
-      patient_type
-    )
-  `)
+          .select(
+            `
+            id,
+            appointment_datetime,
+            status,
+            appointment_type,
+            patient:patient_users (
+              id,
+              first_name,
+              last_name,
+              pregnancy_weeks,
+              patient_type
+            ),
+            appointment_followups (
+              id,
+              follow_up_datetime,
+              reason
+            )
+          `
+          )
           .eq("obgyn_id", obgynId)
-          .order("status", { ascending: true }) // this won’t work well for custom priority
+          .order("status", { ascending: true })
           .order("appointment_datetime", { ascending: true });
 
-
-
-
-
-        if (error) console.error("Error fetching appointments:", error.message);
-        else setAppointments(data as unknown as AppointmentRow[]);
+        if (error) {
+          console.error("Error fetching appointments:", error.message);
+        } else {
+          setAppointments((data ?? []) as unknown as AppointmentRow[]);
+        }
       } catch (err) {
         console.error("Unexpected error:", err);
       }
 
       setLoading(false);
     };
-
 
     fetchAppointments();
 
@@ -181,18 +196,12 @@ export default function AppointmentPage() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "appointment_followups" },
-        (payload) => {
-          console.log("🔔 New follow-up:", payload.new);
-          fetchAppointments();
-        }
+        () => fetchAppointments()
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "appointments" },
-        (payload) => {
-          console.log("🔔 Appointment updated:", payload.new);
-          fetchAppointments();
-        }
+        () => fetchAppointments()
       )
       .subscribe();
 
@@ -201,44 +210,48 @@ export default function AppointmentPage() {
     };
   }, []);
 
-
-
-
-
-
   const mappedAppointments = useMemo<AppointmentUIRow[]>(() => {
     return appointments.map((a) => {
-      // if follow-ups exist, get the latest one
+      // use latest follow-up (if any) to override display date/time & type
       let latestDate = new Date(a.appointment_datetime);
       let type = a.appointment_type ?? "-";
 
       if (a.appointment_followups && a.appointment_followups.length > 0) {
         const sorted = [...a.appointment_followups].sort(
-          (f1, f2) => new Date(f2.follow_up_datetime).getTime() - new Date(f1.follow_up_datetime).getTime()
+          (f1, f2) =>
+            new Date(f2.follow_up_datetime).getTime() -
+            new Date(f1.follow_up_datetime).getTime()
         );
         latestDate = new Date(sorted[0].follow_up_datetime);
-
-        // ✅ override type if follow-up exists
         type = "Follow-up Checkup";
       }
 
       return {
         id: a.id,
         patientId: a.patient?.id ?? null,
-        patient: a.patient ? `${a.patient.first_name} ${a.patient.last_name}` : "Unknown Patient",
+        patient: a.patient
+          ? `${a.patient.first_name} ${a.patient.last_name}`
+          : "Unknown Patient",
         patientType: a.patient?.patient_type ?? "-",
         weeksPregnant: a.patient?.pregnancy_weeks ?? "-",
-        date: latestDate.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
-        time: latestDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-        type,                                 // 👈 will show Follow-up Checkup
-        status: a.status,                     // 👈 keep original status
+        date: latestDate.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        }),
+        time: latestDate.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        type,
+        status: a.status,
         dateTime: latestDate,
       };
     });
   }, [appointments]);
 
-
-  const sendNotification = async ({
+  // unified notification helper that respects DB constraint
+  const notify = async ({
     recipientId,
     triggeredBy,
     type,
@@ -249,68 +262,62 @@ export default function AppointmentPage() {
   }: {
     recipientId: string;
     triggeredBy: string;
-    type: string;
+    type: AllowedNotificationType;
     title: string;
     message: string;
     relatedAppointmentId?: string;
     relatedFollowupId?: string;
   }) => {
     try {
-      // 1️⃣ Insert in-app notification into Supabase
-      const { error } = await supabase.from('notifications').insert([
+      // 1) In-app notification
+      const { error } = await supabase.from("notifications").insert([
         {
           recipient_id: recipientId,
-          recipient_role: 'Patient', // adjust if you want Secretary/OBGYN
+          recipient_role: "Patient", // valid: 'Patient' | 'OBGYN' | 'Secretary'
           triggered_by: triggeredBy,
-          type,
+          type, // must be one of the allowed values
           title,
           message,
           related_appointment_id: relatedAppointmentId,
-          related_followup_id: relatedFollowupId,
+          related_followup_id: relatedFollowupId ?? null,
         },
       ]);
 
       if (error) {
-        console.error('❌ Error inserting notification:', error.message);
+        console.error("❌ Error inserting notification:", error.message);
         return;
       }
 
-      console.log('✅ In-app notification inserted');
-
-      // 2️⃣ Fetch the recipient's Expo push token
+      // 2) Fetch Expo push token
       const { data: userData, error: userError } = await supabase
-        .from('patient_users')
-        .select('push_token')
-        .eq('id', recipientId)
+        .from("patient_users")
+        .select("push_token")
+        .eq("id", recipientId)
         .single();
 
       if (userError || !userData?.push_token) {
-        console.warn('⚠️ No push token found for user:', recipientId);
+        console.warn("⚠️ No push token found for user:", recipientId);
         return;
       }
 
       const pushToken = userData.push_token;
 
-      // 3️⃣ Send push notification via Expo
-      await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      // 3) Send push via Expo
+      await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: pushToken,
           title,
           body: message,
-          sound: 'default',
+          sound: "default",
           data: { relatedAppointmentId, relatedFollowupId, type },
         }),
       });
-
-      console.log('✅ Push notification sent to device');
     } catch (err) {
-      console.error('❌ Error sending notification:', err);
+      console.error("❌ Error sending notification:", err);
     }
   };
-
-
 
   // ✅ Apply filters + search
   const filteredAppointments = useMemo(() => {
@@ -354,13 +361,10 @@ export default function AppointmentPage() {
 
   const hasAppointments = filteredAppointments.length > 0;
 
-
-
-
   return (
     <div className="flex min-h-screen bg-white">
-      <div className="flex flex-col flex-1  transition-all duration-300 bg-gray-50 shadow-md pb-5 ">
-        <main className="mt-7 px-4 md:px-6   ">
+      <div className="flex flex-col flex-1 transition-all duration-300 bg-gray-50 shadow-md pb-5 ">
+        <main className="mt-7 px-4 md:px-6">
           <Toaster position="top-right" richColors />
           <div className="bg-white rounded-md shadow-md mx-auto p-6">
             <div className="flex flex-col gap-9 items-start w-full">
@@ -376,7 +380,10 @@ export default function AppointmentPage() {
                 <div className="flex flex-wrap gap-4 mt-5 w-full justify-between">
                   <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                     <div className="relative w-full sm:w-[300px]">
-                      <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fontSize="small" />
+                      <SearchIcon
+                        className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                        fontSize="small"
+                      />
                       <Input
                         className="pl-10 border border-gray-300 w-full"
                         placeholder="Search by name"
@@ -384,7 +391,12 @@ export default function AppointmentPage() {
                         onChange={(e) => setSearch(e.target.value)}
                       />
                     </div>
-                    <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value === "allstatus" ? "" : value)}>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(value) =>
+                        setStatusFilter(value === "allstatus" ? "" : value)
+                      }
+                    >
                       <SelectTrigger className="w-[120px] border border-gray-300">
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
@@ -393,18 +405,25 @@ export default function AppointmentPage() {
                         <SelectItem value="accepted">Accepted</SelectItem>
                         <SelectItem value="done">Done</SelectItem>
                         <SelectItem value="rescheduled">Reschedule</SelectItem>
-
                       </SelectContent>
                     </Select>
-                    <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value === "alltypes" ? "" : value)}>
+                    <Select
+                      value={typeFilter}
+                      onValueChange={(value) =>
+                        setTypeFilter(value === "alltypes" ? "" : value)
+                      }
+                    >
                       <SelectTrigger className="w-[140px] border border-gray-300">
                         <SelectValue placeholder="Type" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="alltypes">All</SelectItem>
-                        <SelectItem value="standard">Standard Consultation</SelectItem>
-                        <SelectItem value="extended">Extended Care Consultation</SelectItem>
-
+                        <SelectItem value="standard">
+                          Standard Consultation
+                        </SelectItem>
+                        <SelectItem value="extended">
+                          Extended Care Consultation
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -424,7 +443,7 @@ export default function AppointmentPage() {
               {/* Table */}
               <div className="w-full">
                 {loading ? (
-                  <div className="flex items-center  justify-center gap-2">
+                  <div className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600 "></div>
                     <p className="text-sm text-gray-500">Loading appointments...</p>
                   </div>
@@ -448,12 +467,17 @@ export default function AppointmentPage() {
                               <TableCell>
                                 <div className="flex flex-col">
                                   <button
-                                    onClick={() => appt.patientId && navigate(`/appointments/patientprofile/${appt.patientId}`)}
-
-                                    className=" cursor-pointer font-lato text-[15px] text-left text-[#1F2937] hover:underline hover:text-[#1F2937]">
+                                    onClick={() =>
+                                      appt.patientId &&
+                                      navigate(`/appointments/patientprofile/${appt.patientId}`)
+                                    }
+                                    className="cursor-pointer font-lato text-[15px] text-left text-[#1F2937] hover:underline hover:text-[#1F2937]"
+                                  >
                                     {appt.patient}
                                   </button>
-                                  <span className="text-[12px] text-gray-600">{appt.patientType}, {appt.weeksPregnant} weeks </span>
+                                  <span className="text-[12px] text-gray-600">
+                                    {appt.patientType}, {appt.weeksPregnant} weeks
+                                  </span>
                                 </div>
                               </TableCell>
                               <TableCell>
@@ -464,7 +488,13 @@ export default function AppointmentPage() {
                               </TableCell>
                               <TableCell>{appt.type}</TableCell>
                               <TableCell>
-                                <Badge variant={appt.status.toLowerCase() as VariantProps<typeof badgeVariants>["variant"]}>
+                                <Badge
+                                  variant={
+                                    appt.status.toLowerCase() as VariantProps<
+                                      typeof badgeVariants
+                                    >["variant"]
+                                  }
+                                >
                                   {capitalize(appt.status)}
                                 </Badge>
                               </TableCell>
@@ -475,12 +505,10 @@ export default function AppointmentPage() {
                                     const isAccepted = s === "accepted";
                                     const isRescheduled = s === "rescheduled";
                                     const isDone = s === "done";
-
                                     const callDisabled = !isAccepted;
 
                                     return (
                                       <>
-                                        {/* Call Button */}
                                         {/* Call Button */}
                                         <HoverCard>
                                           <HoverCardTrigger asChild>
@@ -493,20 +521,21 @@ export default function AppointmentPage() {
                                                   state: {
                                                     appointmentId: appt.id,
                                                     patientName: appt.patient,
-                                                    autoCall: true, // ✅ trigger auto call
+                                                    autoCall: true,
                                                   },
                                                 });
-
-
                                               }}
-                                              className={`w-8 h-8 p-0 cursor-pointer ${isAccepted
-                                                ? "bg-[#65B43B] hover:shadow-md"
-                                                : "bg-gray-300 cursor-not-allowed"
-                                                }`}
+                                              className={`w-8 h-8 p-0 cursor-pointer ${
+                                                isAccepted
+                                                  ? "bg-[#65B43B] hover:shadow-md"
+                                                  : "bg-gray-300 cursor-not-allowed"
+                                              }`}
                                             >
                                               <Icon
                                                 icon="material-symbols:call"
-                                                className={`w-5 h-5 ${isAccepted ? "text-white" : "text-gray-700"}`}
+                                                className={`w-5 h-5 ${
+                                                  isAccepted ? "text-white" : "text-gray-700"
+                                                }`}
                                               />
                                             </Button>
                                           </HoverCardTrigger>
@@ -515,8 +544,7 @@ export default function AppointmentPage() {
                                           </HoverCardContent>
                                         </HoverCard>
 
-
-                                        {/* ✅ Done Button (only if Accepted or Rescheduled) */}
+                                        {/* Done Button (only if Accepted or Rescheduled) */}
                                         {(isAccepted || isRescheduled) && (
                                           <Button
                                             variant="ghost"
@@ -526,28 +554,29 @@ export default function AppointmentPage() {
                                               try {
                                                 toast.info("Marking as done...");
 
-                                                // Update UI immediately
+                                                // Optimistic UI
                                                 setAppointments((prev) =>
                                                   prev.map((a) =>
                                                     a.id === appt.id ? { ...a, status: "Done" } : a
                                                   )
                                                 );
 
-                                                // Persist to database
+                                                // Persist
                                                 const { error } = await supabase
                                                   .from("appointments")
                                                   .update({ status: "Done" })
                                                   .eq("id", appt.id);
-
                                                 if (error) throw error;
 
-                                                // Send notification
-                                                const { data: { user } } = await supabase.auth.getUser();
+                                                // Notify
+                                                const {
+                                                  data: { user },
+                                                } = await supabase.auth.getUser();
                                                 if (appt.patientId && user) {
-                                                  await sendNotification({
+                                                  await notify({
                                                     recipientId: appt.patientId,
                                                     triggeredBy: user.id,
-                                                    type: "appointment_done",
+                                                    type: "appointment_update", // ✅ allowed
                                                     title: "Appointment Completed",
                                                     message: "Your appointment has been marked as done.",
                                                     relatedAppointmentId: appt.id,
@@ -570,13 +599,11 @@ export default function AppointmentPage() {
                                           value={actionValue}
                                           onValueChange={(value) => {
                                             setSelectedAppointment(appt);
-
                                             if (value === "resched") {
                                               setOpenReschedule(true);
                                             } else if (value === "follow") {
                                               setOpenFollowUp(true);
                                             }
-
                                             setActionValue("");
                                           }}
                                           disabled={appt.status.toLowerCase() === "declined"}
@@ -608,7 +635,6 @@ export default function AppointmentPage() {
                                   })()}
                                 </div>
                               </TableCell>
-
                             </TableRow>
                           ))}
                         </TableBody>
@@ -621,7 +647,6 @@ export default function AppointmentPage() {
                       <Icon icon="tabler:face-id-error" className="w-5 h-5 " />
                       <div>
                         <AlertTitle className="text-sm font-medium">No appointments to display</AlertTitle>
-
                       </div>
                     </Alert>
                   </div>
@@ -667,6 +692,7 @@ export default function AppointmentPage() {
           </div>
         </main>
 
+        {/* Reschedule */}
         <RescheduleDialog
           open={openReschedule}
           onClose={() => {
@@ -683,23 +709,38 @@ export default function AppointmentPage() {
 
               toast.info("Rescheduling appointment...");
 
+              // Optimistic UI
               setAppointments((prev) =>
                 prev.map((a) =>
                   a.id === selectedAppointment?.id
-                    ? { ...a, appointment_datetime: newDate.toISOString(), status: "Rescheduled" }
+                    ? {
+                        ...a,
+                        appointment_datetime: newDate.toISOString(),
+                        status: "Rescheduled",
+                      }
                     : a
                 )
               );
 
-              await new Promise((r) => setTimeout(r, 1000));
+              // Persist
+              const { error: persistErr } = await supabase
+                .from("appointments")
+                .update({
+                  appointment_datetime: newDate.toISOString(),
+                  status: "Rescheduled",
+                })
+                .eq("id", selectedAppointment!.id);
+              if (persistErr) throw persistErr;
 
-              // ✅ send notification here
-              const { data: { user } } = await supabase.auth.getUser();
+              // Notify
+              const {
+                data: { user },
+              } = await supabase.auth.getUser();
               if (selectedAppointment?.patientId && user) {
-                await sendNotification({
+                await notify({
                   recipientId: selectedAppointment.patientId,
                   triggeredBy: user.id,
-                  type: "appointment_update",
+                  type: "appointment_update", // ✅ allowed
                   title: "Appointment Rescheduled",
                   message: `Your appointment was rescheduled to ${newDate.toLocaleString()}.`,
                   relatedAppointmentId: selectedAppointment.id,
@@ -714,9 +755,7 @@ export default function AppointmentPage() {
           }}
         />
 
-
-
-
+        {/* Follow-up */}
         <FollowUpDialog
           open={openFollowUp}
           onClose={() => {
@@ -730,55 +769,57 @@ export default function AppointmentPage() {
                 toast.warning("Check your inputs ⚠️");
                 return;
               }
-
-              toast.info("Scheduling follow-up...");
-
               if (!selectedAppointment?.id || !selectedAppointment?.patientId) {
                 toast.error("No appointment selected ❌");
                 return;
               }
 
-              // 1️⃣ Mark the old appointment as Done
+              toast.info("Scheduling follow-up...");
+
+              // 1) Mark old appointment as Done
               const { error: updateError } = await supabase
                 .from("appointments")
                 .update({ status: "Done" })
                 .eq("id", selectedAppointment.id);
-
               if (updateError) throw updateError;
 
-              // 2️⃣ Create a new appointment row for the follow-up
+              // 2) Create a new appointment as the follow-up
+              const obgynId = obgynIdRef.current;
+              if (!obgynId) throw new Error("No OB-GYN ID resolved");
+
               const { data: newAppt, error: insertError } = await supabase
                 .from("appointments")
                 .insert([
                   {
-                    obgyn_id: (await supabase.auth.getUser()).data.user?.id, // or derive obgynId like in fetchAppointments
+                    obgyn_id: obgynId,
                     patient_id: selectedAppointment.patientId,
                     appointment_datetime: newFollowUp.follow_up_datetime,
                     appointment_type: "Follow-up Checkup",
-                    status: "Accepted", // or "Pending", depending on your flow
+                    status: "Accepted", // adjust if you want Pending
                     parent_appointment_id: selectedAppointment.id,
                   },
                 ])
                 .select()
                 .single();
-
               if (insertError) throw insertError;
 
-              // 3️⃣ Update local state (add the new appointment)
+              // 3) Update local state (replace old status, add new appt)
               setAppointments((prev) => [
                 ...prev.map((a) =>
                   a.id === selectedAppointment.id ? { ...a, status: "Done" } : a
                 ),
-                newAppt as AppointmentRow,
+                newAppt as unknown as AppointmentRow,
               ]);
 
-              // 4️⃣ Send notification
-              const { data: { user } } = await supabase.auth.getUser();
+              // 4) Notify
+              const {
+                data: { user },
+              } = await supabase.auth.getUser();
               if (user) {
-                await sendNotification({
+                await notify({
                   recipientId: selectedAppointment.patientId,
                   triggeredBy: user.id,
-                  type: "appointment_followup",
+                  type: "followup_reminder", // ✅ allowed
                   title: "Follow-up Scheduled",
                   message: `You have a follow-up scheduled on ${new Date(
                     newFollowUp.follow_up_datetime
@@ -795,12 +836,7 @@ export default function AppointmentPage() {
               console.error(err);
             }
           }}
-
         />
-
-
-
-
       </div>
     </div>
   );

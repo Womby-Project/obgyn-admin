@@ -18,6 +18,9 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+
 import Cropper from "react-easy-crop"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -43,7 +46,6 @@ async function getCroppedBlobSquare(
 ): Promise<Blob> {
   const image = await loadImage(imageSrc)
 
-  // First draw the whole (optionally rotated) image on an offscreen canvas
   const off = document.createElement("canvas")
   const offCtx = off.getContext("2d")!
   const maxSide = Math.ceil(Math.sqrt(image.width * image.width + image.height * image.height))
@@ -58,7 +60,6 @@ async function getCroppedBlobSquare(
   offCtx.drawImage(image, -image.width / 2, -image.height / 2)
   offCtx.restore()
 
-  // Now crop from the rotated canvas into a final 512x512 square
   const OUT = 512
   const out = document.createElement("canvas")
   out.width = OUT
@@ -76,20 +77,6 @@ async function getCroppedBlobSquare(
   return new Promise((resolve) =>
     out.toBlob((b) => resolve(b as Blob), "image/jpeg", 0.92)
   )
-}
-
-/* ---------------- DOB helpers (native date input, no TZ drift) ---------------- */
-const toDateInputValue = (d?: Date) => {
-  if (!d) return ""
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
-const fromDateInputValue = (v: string): Date | undefined => {
-  if (!v) return undefined
-  const [y, m, d] = v.split("-").map(Number)
-  return new Date(y, m - 1, d)
 }
 
 type FormDataType = {
@@ -133,7 +120,7 @@ export default function SecretaryEditProfile() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null)
   const [uploading, setUploading] = useState(false)
 
-  // 🔹 Fetch profile on mount
+  // Fetch profile
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -170,17 +157,13 @@ export default function SecretaryEditProfile() {
     fetchProfile()
   }, [])
 
-  // 🔹 Local change handler
   const handleChange = <K extends keyof FormDataType>(field: K, value: FormDataType[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
-
-  // 🔹 Toggle edit
   const toggleEdit = <K extends keyof EditModeType>(field: K) => {
     setEditMode((prev) => ({ ...prev, [field]: !prev[field] }))
   }
 
-  // 🔹 Save field to Supabase
   const saveField = async <K extends keyof FormDataType>(field: K) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -208,7 +191,7 @@ export default function SecretaryEditProfile() {
     }
   }
 
-  // 🔹 Choose file -> open cropper (no stretching; crop to square)
+  // File -> Cropper
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -219,12 +202,9 @@ export default function SecretaryEditProfile() {
     setRotation(0)
     setCropperOpen(true)
   }
-
   const onCropComplete = useCallback((_: any, areaPixels: any) => {
     setCroppedAreaPixels(areaPixels)
   }, [])
-
-  // 🔹 Confirm crop & upload (solid white background, 1:1 square)
   const confirmCropAndUpload = useCallback(async () => {
     if (!rawImageSrc || !croppedAreaPixels) return
     setUploading(true)
@@ -258,29 +238,35 @@ export default function SecretaryEditProfile() {
   }, [croppedAreaPixels, rawImageSrc, rotation])
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <Toaster position="top-right" />
 
-      {/* Avatar + Buttons */}
-      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
-        <Avatar className="w-32 h-32 sm:w-40 sm:h-40 overflow-hidden rounded-full border border-gray-200">
-          {/* Prevent stretching */}
-          <AvatarImage
-            src={formData.profilePictureUrl}
-            className="w-full h-full object-cover"
-          />
-          <AvatarFallback>
-            {formData.firstName?.[0]}
-            {formData.lastName?.[0]}
-          </AvatarFallback>
-        </Avatar>
-        <div className="flex flex-col gap-2 items-center sm:items-start mt-4 sm:mt-[60px] sm:ml-13">
-          <label className="bg-[#E46B64] text-white w-[147px] h-[38px] rounded-sm hover:opacity-90 flex items-center justify-center cursor-pointer">
+      {/* Header row — full width */}
+      <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4 p-6">
+        <div className="flex items-center gap-4">
+          <Avatar className="w-32 h-32 sm:w-40 sm:h-40 overflow-hidden rounded-full border border-gray-200 ring-2 ring-[#F4C9C6]">
+            <AvatarImage src={formData.profilePictureUrl} className="w-full h-full object-cover" />
+            <AvatarFallback className="text-lg font-semibold text-[#E46B64] bg-[#FFF4F3]">
+              {formData.firstName?.[0]}
+              {formData.lastName?.[0]}
+            </AvatarFallback>
+          </Avatar>
+
+          <div>
+            <h2 className="font-lato text-xl md:text-2xl font-semibold text-gray-900 leading-tight">
+              {formData.firstName || "—"} {formData.lastName || ""}
+            </h2>
+            <p className="mt-0.5 text-sm text-gray-500">{formData.email || "—"}</p>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <label className="bg-[#E46B64] text-white h-10 px-4 rounded-lg hover:opacity-90 flex items-center justify-center cursor-pointer shadow-sm">
             Upload New
             <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
           </label>
           <button
-            className="bg-white border border-[#DBDEE2] text-[#6B7280] w-[147px] h-[38px] rounded-sm hover:shadow-md"
+            className="h-10 px-4 rounded-lg border border-[#DBDEE2] bg-white text-[#6B7280] hover:shadow-md"
             onClick={async () => {
               handleChange("profilePictureUrl", "")
               await saveField("profilePictureUrl")
@@ -291,60 +277,80 @@ export default function SecretaryEditProfile() {
         </div>
       </div>
 
-      <Separator className="text-black" />
+      <Separator className="bg-gray-200" />
 
-      <h1 className="font-lato text-[15px] text-gray-500 mb-0 uppercase font-semibold">
-        Personal Information
-      </h1>
+      {/* Personal Info (OBGYN-style inputs) */}
+      <div className="p-6">
+        <h3 className="font-lato text-xs text-gray-500 mb-3 uppercase font-semibold tracking-wide">
+          Personal Information
+        </h3>
 
-      {renderField("First Name", "firstName", formData.firstName, editMode.firstName, handleChange, saveField, toggleEdit)}
-      {renderField("Last Name", "lastName", formData.lastName, editMode.lastName, handleChange, saveField, toggleEdit)}
-      {renderField("Gender", "gender", formData.gender, editMode.gender, handleChange, saveField, toggleEdit)}
+        {renderField("First Name", "firstName", formData.firstName, editMode.firstName, handleChange, saveField, toggleEdit)}
+        {renderField("Last Name", "lastName", formData.lastName, editMode.lastName, handleChange, saveField, toggleEdit)}
+        {renderField("Gender", "gender", formData.gender, editMode.gender, handleChange, saveField, toggleEdit)}
 
-      {/* DOB (native date picker in edit mode) */}
-      <div className="w-full sm:w-[456px] mt-[-14px] px-3 py-2">
-        <div className="flex justify-between items-center mb-1">
-          <p className="text-[17px] font-lato text-gray-700">Date of Birth</p>
-          <button
-            onClick={() => (editMode.dob ? saveField("dob") : toggleEdit("dob"))}
-            className="text-[17px] font-lato text-[#E46B64] hover:underline"
-          >
-            {editMode.dob ? "Save" : "Edit"}
-          </button>
+        {/* DOB — same Popover + Calendar as OBGYN */}
+        <div className="w-full mt-2">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="font-lato text-[15px] font-medium text-gray-800">Date of Birth</p>
+            <button
+              onClick={() => (editMode.dob ? saveField("dob") : toggleEdit("dob"))}
+              className="text-[14px] font-medium text-[#E46B64] hover:underline"
+              aria-label={editMode.dob ? "Save date of birth" : "Edit date of birth"}
+            >
+              {editMode.dob ? "Save" : "Edit"}
+            </button>
+          </div>
+
+          {editMode.dob ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-[15px] font-lato text-gray-800 shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F4C9C6]"
+                  aria-label="Open date picker"
+                >
+                  {formData.dob ? format(formData.dob, "PPP") : "Pick a date"}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 rounded-xl border border-gray-200 shadow-md">
+                <Calendar
+                  mode="single"
+                  selected={formData.dob}
+                  onSelect={(date) => handleChange("dob", date)}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <input
+              type="text"
+              value={formData.dob ? format(formData.dob, "PPP") : ""}
+              readOnly
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[15px] font-lato text-gray-600"
+              aria-readonly="true"
+            />
+          )}
         </div>
-        {editMode.dob ? (
-          <input
-            type="date"
-            value={toDateInputValue(formData.dob)}
-            onChange={(e) => handleChange("dob", fromDateInputValue(e.target.value))}
-            className="border-b w-full text-[16px] font-lato px-2 py-1 rounded-sm border-gray-300 text-gray-700 focus:outline-none"
-            max={toDateInputValue(new Date())}
-          />
-        ) : (
-          <input
-            type="text"
-            value={formData.dob ? format(formData.dob, "PPP") : ""}
-            readOnly
-            className="border-b w-full text-[16px] font-lato px-2 py-1 rounded-sm border-gray-300 text-gray-500 cursor-default"
-          />
-        )}
       </div>
 
-      <h1 className="font-lato text-[15px] text-gray-500 mb-0 uppercase font-semibold">
-        Contact Information
-      </h1>
+      {/* Contact Info (OBGYN-style inputs) */}
+      <div className="px-6 pb-6">
+        <h3 className="font-lato text-xs text-gray-500 mb-3 uppercase font-semibold tracking-wide">
+          Contact Information
+        </h3>
 
-      {renderField("Email", "email", formData.email, editMode.email, handleChange, saveField, toggleEdit)}
-      {renderField("Phone", "phone", formData.phone, editMode.phone, handleChange, saveField, toggleEdit)}
+        {renderField("Email", "email", formData.email, editMode.email, handleChange, saveField, toggleEdit)}
+        {renderField("Phone", "phone", formData.phone, editMode.phone, handleChange, saveField, toggleEdit)}
+      </div>
 
       {/* --- Cropper Dialog (solid white background, 1:1 square) --- */}
       <Dialog open={cropperOpen} onOpenChange={setCropperOpen}>
-        <DialogContent className="max-w-[720px] bg-white rounded-md p-6">
+        <DialogContent className="max-w-[720px] bg-white rounded-2xl p-6 border border-gray-200 shadow-xl">
           <DialogHeader>
-            <DialogTitle>Crop your photo (1:1)</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-gray-900">Crop your photo (1:1)</DialogTitle>
           </DialogHeader>
 
-          <div className="relative w-full bg-white rounded-md overflow-hidden border border-gray-300" style={{ aspectRatio: "1 / 1" }}>
+          <div className="relative w-full bg-white rounded-xl overflow-hidden border border-gray-300" style={{ aspectRatio: "1 / 1" }}>
             {rawImageSrc && (
               <Cropper
                 image={rawImageSrc}
@@ -364,17 +370,11 @@ export default function SecretaryEditProfile() {
 
           <div className="mt-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Button
-                onClick={() => setRotation((r) => (r - 90 + 360) % 360)}
-                style={{ backgroundColor: "#E46B64", color: "white" }}
-              >
+              <Button onClick={() => setRotation((r) => (r - 90 + 360) % 360)} className="h-9 rounded-lg bg-[#E46B64] text-white hover:bg-[#de5d56]">
                 <RotateCw className="w-4 h-4 rotate-180" />
               </Button>
               <span className="text-sm">{rotation}°</span>
-              <Button
-                onClick={() => setRotation((r) => (r + 90) % 360)}
-                style={{ backgroundColor: "#E46B64", color: "white" }}
-              >
+              <Button onClick={() => setRotation((r) => (r + 90) % 360)} className="h-9 rounded-lg bg-[#E46B64] text-white hover:bg-[#de5d56]">
                 <RotateCw className="w-4 h-4" />
               </Button>
             </div>
@@ -393,10 +393,7 @@ export default function SecretaryEditProfile() {
               <ZoomIn className="w-4 h-4 text-gray-600" />
             </div>
 
-            <Button
-              onClick={() => { setCrop({ x: 0, y: 0 }); setZoom(1); setRotation(0) }}
-              style={{ backgroundColor: "#E46B64", color: "white" }}
-            >
+            <Button onClick={() => { setCrop({ x: 0, y: 0 }); setZoom(1); setRotation(0) }} className="h-9 rounded-lg bg-[#F3F4F6] text-gray-700 hover:bg-[#e9eaee]">
               <RefreshCw className="w-4 h-4" />
             </Button>
           </div>
@@ -409,24 +406,21 @@ export default function SecretaryEditProfile() {
                 setRawImageSrc(null)
                 setCropperOpen(false)
               }}
+              className="hover:bg-gray-50"
             >
               <X className="w-4 h-4 mr-1" /> Cancel
             </Button>
-            <Button
-              onClick={confirmCropAndUpload}
-              disabled={!croppedAreaPixels || uploading}
-              style={{ backgroundColor: "#E46B64", color: "white" }}
-            >
+            <Button onClick={confirmCropAndUpload} disabled={!croppedAreaPixels || uploading} className="rounded-lg bg-[#E46B64] text-white hover:bg-[#de5d56]">
               {uploading ? "Uploading..." : <><Check className="w-4 h-4 mr-1" /> Save</>}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }
 
-// 🔹 Helper – consistent with OBGYN style
+/* ------------ Field renderer (identical look & feel to OBGYN) ------------ */
 const renderField = (
   label: string,
   key: keyof FormDataType,
@@ -437,13 +431,14 @@ const renderField = (
   toggleEdit: (key: keyof FormDataType) => void
 ) => {
   return (
-    <div className="w-full sm:w-[456px] mt-[-14px] px-3 py-2">
-      <div className="flex justify-between items-center mb-1">
-        <Label className="text-[17px] font-lato text-gray-700">{label}</Label>
+    <div className="w-full">
+      <div className="mb-1 flex items-center justify-between">
+        <Label className="font-lato text-[15px] font-medium text-gray-800">{label}</Label>
         <button
           type="button"
           onClick={() => (isEditing ? saveField(key) : toggleEdit(key))}
-          className="text-[17px] font-lato text-[#E46B64] hover:underline"
+          className="text-[13px] font-medium text-[#E46B64] underline-offset-2 hover:underline"
+          aria-label={isEditing ? `Save ${label}` : `Edit ${label}`}
         >
           {isEditing ? "Save" : "Edit"}
         </button>
@@ -452,10 +447,10 @@ const renderField = (
       {isEditing ? (
         key === "gender" ? (
           <Select value={value} onValueChange={(val) => handleChange("gender", val)}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-full rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#F4C9C6]">
               <SelectValue placeholder="Select gender" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-xl border border-gray-200 shadow-md">
               <SelectItem value="Male">Male</SelectItem>
               <SelectItem value="Female">Female</SelectItem>
               <SelectItem value="Other">Other</SelectItem>
@@ -466,13 +461,16 @@ const renderField = (
             type="text"
             value={value || ""}
             onChange={(e) => handleChange(key, e.target.value)}
-            className="w-full focus:outline-none focus:ring-0"
+            className="w-full rounded-lg border-gray-300 bg-white text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F4C9C6]"
+            aria-label={label}
           />
         )
       ) : (
         <div
-          className="border-b w-full text-[16px] font-lato px-2 py-1 rounded-sm border-gray-300 text-gray-500 cursor-pointer"
+          className="flex flex-wrap gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[15px] font-lato text-gray-700 hover:border-gray-300"
           onClick={() => toggleEdit(key)}
+          role="button"
+          aria-label={`Edit ${label}`}
         >
           {value || `Click to edit ${label.toLowerCase()}`}
         </div>

@@ -88,7 +88,7 @@ type FormDataType = {
   email: string
   phone: string
   education: string
-  organization: string          // 👈 NEW
+  organization: string
   affiliatedHospitals: string[]
   profilePictureUrl?: string
 }
@@ -103,7 +103,7 @@ export default function OBGYNProfile() {
     email: "john.doe@email.com",
     phone: "09123456789",
     education: "MD",
-    organization: "",            // 👈 NEW
+    organization: "",
     affiliatedHospitals: ["St. Luke's Medical Center"],
     profilePictureUrl: "https://github.com/shadcn.png",
   })
@@ -116,7 +116,7 @@ export default function OBGYNProfile() {
     email: false,
     phone: false,
     education: false,
-    organization: false,         // 👈 NEW
+    organization: false,
     affiliatedHospitals: false,
     profilePictureUrl: false,
   })
@@ -159,7 +159,7 @@ export default function OBGYNProfile() {
           email: data.email,
           phone: data.phone_number || "",
           education: data.education || "",
-          organization: data.organization || "", // 👈 NEW
+          organization: data.organization || "",
           affiliatedHospitals: data.affiliated_hospitals_clinics || [],
           profilePictureUrl: data.profile_picture_url || "https://github.com/shadcn.png",
         })
@@ -191,7 +191,7 @@ export default function OBGYNProfile() {
     if (field === "email") updatePayload.email = formData.email
     if (field === "phone") updatePayload.phone_number = formData.phone
     if (field === "education") updatePayload.education = formData.education
-    if (field === "organization") updatePayload.organization = formData.organization      // 👈 NEW
+    if (field === "organization") updatePayload.organization = formData.organization
     if (field === "affiliatedHospitals")
       updatePayload.affiliated_hospitals_clinics = formData.affiliatedHospitals
     if (field === "profilePictureUrl") updatePayload.profile_picture_url = formData.profilePictureUrl
@@ -252,99 +252,138 @@ export default function OBGYNProfile() {
   }, [croppedAreaPixels, rawImageSrc, rotation])
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
+      {/* keep toaster but no outer layout wrapper */}
       <Toaster position="top-right" />
 
-      {/* Avatar + Buttons */}
-      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
-        <Avatar className="w-32 h-32 sm:w-40 sm:h-40 overflow-hidden rounded-full border border-gray-200">
-          <AvatarImage src={formData.profilePictureUrl} className="w-full h-full object-cover" />
-          <AvatarFallback>
-            {formData.firstName?.[0]}
-            {formData.lastName?.[0]}
-          </AvatarFallback>
-        </Avatar>
-        <div className="flex flex-col gap-2 items-center sm:items-start mt-4 sm:mt-[60px] sm:ml-13">
-          <label className="bg-[#E46B64] text-white w-[147px] h-[38px] rounded-sm hover:opacity-90 flex items-center justify-center cursor-pointer">
-            Upload New
+      {/* Avatar Row — now full-width in the parent profile container */}
+      <div className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-4">
+          <Avatar className="h-24 w-24 md:h-28 md:w-28 overflow-hidden rounded-full ring-2 ring-[#F4C9C6]">
+            <AvatarImage src={formData.profilePictureUrl} className="h-full w-full object-cover" />
+            <AvatarFallback className="text-lg font-semibold text-[#E46B64] bg-[#FFF4F3]">
+              {formData.firstName?.[0]}
+              {formData.lastName?.[0]}
+            </AvatarFallback>
+          </Avatar>
+
+          <div>
+            <h2 className="font-lato text-xl font-semibold leading-tight text-gray-900 md:text-2xl">
+              Dr. {formData.firstName} {formData.lastName}
+            </h2>
+            <p className="mt-0.5 text-sm text-gray-500">
+              {formData.education || "—"} {formData.organization ? `• ${formData.organization}` : ""}
+            </p>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-3">
+          <label
+            className="inline-flex h-10 items-center justify-center rounded-lg bg-[#E46B64] px-4 text-sm font-medium text-white shadow-sm transition hover:opacity-90 cursor-pointer"
+            aria-label="Upload new profile photo"
+          >
+            Upload Photo
             <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
           </label>
           <button
-            className="bg-white border border-[#DBDEE2] text-[#6B7280] w-[147px] h-[38px] rounded-sm hover:shadow-md"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 shadow-sm transition hover:shadow-md"
             onClick={async () => {
               handleChange("profilePictureUrl", "")
               await saveField("profilePictureUrl")
             }}
+            aria-label="Remove current profile photo"
           >
-            Remove Photo
+            Remove
           </button>
         </div>
       </div>
 
-      <Separator className="text-black" />
+      <Separator className="bg-gray-200" />
 
-      <h1 className="font-lato text-[15px] text-gray-500 mb-0 uppercase font-semibold">
-        Personal Information
-      </h1>
+      {/* Two-column sections — full width, not inside another wrapper card */}
+      <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2">
+        <section className="rounded-xl border border-gray-100 bg-white p-4 md:p-5 shadow-[0_1px_0_#f1f5f9]">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Personal Information
+          </h3>
 
-      {renderField("First Name", "firstName", formData.firstName, editMode.firstName, handleChange, saveField, toggleEdit)}
-      {renderField("Last Name", "lastName", formData.lastName, editMode.lastName, handleChange, saveField, toggleEdit)}
-      {renderField("Gender", "gender", formData.gender, editMode.gender, handleChange, saveField, toggleEdit)}
+          <div className="space-y-2">
+            {renderField("First Name", "firstName", formData.firstName, editMode.firstName, handleChange, saveField, toggleEdit)}
+            {renderField("Last Name", "lastName", formData.lastName, editMode.lastName, handleChange, saveField, toggleEdit)}
+            {renderField("Gender", "gender", formData.gender, editMode.gender, handleChange, saveField, toggleEdit)}
 
-      {/* DOB */}
-      <div className="w-full sm:w-[456px] mt-[-14px] px-3 py-2">
-        <div className="flex justify-between items-center mb-1">
-          <p className="text-[17px] font-lato text-gray-700">Date of Birth</p>
-          <button
-            onClick={() => (editMode.dob ? saveField("dob") : toggleEdit("dob"))}
-            className="text-[17px] font-lato text-[#E46B64] hover:underline"
-          >
-            {editMode.dob ? "Save" : "Edit"}
-          </button>
-        </div>
-        {editMode.dob ? (
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="border-b w-full text-[16px] font-lato px-2 py-1 text-left rounded-sm">
-                {formData.dob ? format(formData.dob, "PPP") : "Pick a date"}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={formData.dob}
-                onSelect={(date) => handleChange("dob", date)}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-        ) : (
-          <input
-            type="text"
-            value={formData.dob ? format(formData.dob, "PPP") : ""}
-            readOnly
-            className="border-b w-full text-[16px] font-lato px-2 py-1 rounded-sm border-gray-300 text-gray-500 cursor-default"
-          />
-        )}
+            {/* DOB */}
+            <div className="w-full mt-2">
+              <div className="mb-1 flex items-center justify-between">
+                <p className="font-lato text-[15px] font-medium text-gray-800">Date of Birth</p>
+                <button
+                  onClick={() => (editMode.dob ? saveField("dob") : toggleEdit("dob"))}
+                  className="text-[14px] font-medium text-[#E46B64] hover:underline"
+                  aria-label={editMode.dob ? "Save date of birth" : "Edit date of birth"}
+                >
+                  {editMode.dob ? "Save" : "Edit"}
+                </button>
+              </div>
+
+              {editMode.dob ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-[15px] font-lato text-gray-800 shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F4C9C6]"
+                      aria-label="Open date picker"
+                    >
+                      {formData.dob ? format(formData.dob, "PPP") : "Pick a date"}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 rounded-xl border border-gray-200 shadow-md">
+                    <Calendar
+                      mode="single"
+                      selected={formData.dob}
+                      onSelect={(date) => handleChange("dob", date)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <input
+                  type="text"
+                  value={formData.dob ? format(formData.dob, "PPP") : ""}
+                  readOnly
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[15px] font-lato text-gray-600"
+                  aria-readonly="true"
+                />
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-gray-100 bg-white p-4 md:p-5 shadow-[0_1px_0_#f1f5f9]">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Contact & Credentials
+          </h3>
+
+          <div className="space-y-2">
+            {renderField("Email", "email", formData.email, editMode.email, handleChange, saveField, toggleEdit)}
+            {renderField("Phone", "phone", formData.phone, editMode.phone, handleChange, saveField, toggleEdit)}
+            {renderField("Education", "education", formData.education, editMode.education, handleChange, saveField, toggleEdit)}
+            {renderField("Organization", "organization", formData.organization, editMode.organization, handleChange, saveField, toggleEdit)}
+            {renderField("Affiliated Hospitals", "affiliatedHospitals", formData.affiliatedHospitals, editMode.affiliatedHospitals, handleChange, saveField, toggleEdit)}
+          </div>
+        </section>
       </div>
-
-      {renderField("Email", "email", formData.email, editMode.email, handleChange, saveField, toggleEdit)}
-      {renderField("Phone", "phone", formData.phone, editMode.phone, handleChange, saveField, toggleEdit)}
-      {renderField("Education", "education", formData.education, editMode.education, handleChange, saveField, toggleEdit)}
-
-      {/* 👇 NEW Organization field */}
-      {renderField("Organization", "organization", formData.organization, editMode.organization, handleChange, saveField, toggleEdit)}
-
-      {renderField("Affiliated Hospitals", "affiliatedHospitals", formData.affiliatedHospitals, editMode.affiliatedHospitals, handleChange, saveField, toggleEdit)}
 
       {/* --- Cropper Dialog (solid white background, simple UI) --- */}
       <Dialog open={cropperOpen} onOpenChange={setCropperOpen}>
-        <DialogContent className="max-w-[800px] bg-white rounded-md p-6">
+        <DialogContent className="max-w-[860px] rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
           <DialogHeader>
-            <DialogTitle>Crop your photo (16:9)</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-gray-900">Crop your photo (16:9)</DialogTitle>
+            <p className="mt-1 text-sm text-gray-500">
+              Adjust the frame below. Your photo will be saved with a clean white background.
+            </p>
           </DialogHeader>
 
-          <div className="relative aspect-video w-full bg-white rounded-md overflow-hidden border border-gray-300">
+          <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-gray-200 bg-white">
             {rawImageSrc && (
               <Cropper
                 image={rawImageSrc}
@@ -362,25 +401,25 @@ export default function OBGYNProfile() {
             )}
           </div>
 
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => setRotation((r) => (r - 90 + 360) % 360)}
-                style={{ backgroundColor: "#E46B64", color: "white" }}
+                className="h-9 rounded-lg bg-[#E46B64] text-white hover:bg-[#de5d56]"
               >
-                <RotateCw className="w-4 h-4 rotate-180" />
+                <RotateCw className="h-4 w-4 rotate-180" />
               </Button>
-              <span className="text-sm">{rotation}°</span>
+              <span className="text-sm text-gray-600">{rotation}°</span>
               <Button
                 onClick={() => setRotation((r) => (r + 90) % 360)}
-                style={{ backgroundColor: "#E46B64", color: "white" }}
+                className="h-9 rounded-lg bg-[#E46B64] text-white hover:bg-[#de5d56]"
               >
-                <RotateCw className="w-4 h-4" />
+                <RotateCw className="h-4 w-4" />
               </Button>
             </div>
 
             <div className="flex items-center gap-2">
-              <ZoomOut className="w-4 h-4 text-gray-600" />
+              <ZoomOut className="h-4 w-4 text-gray-600" />
               <input
                 type="range"
                 min={1}
@@ -388,20 +427,22 @@ export default function OBGYNProfile() {
                 step={0.01}
                 value={zoom}
                 onChange={(e) => setZoom(parseFloat(e.target.value))}
-                className="w-40 accent-[#E46B64]"
+                className="w-48 accent-[#E46B64]"
+                aria-label="Zoom"
               />
-              <ZoomIn className="w-4 h-4 text-gray-600" />
+              <ZoomIn className="h-4 w-4 text-gray-600" />
             </div>
 
             <Button
               onClick={() => { setCrop({ x: 0, y: 0 }); setZoom(1); setRotation(0) }}
-              style={{ backgroundColor: "#E46B64", color: "white" }}
+              className="h-9 rounded-lg bg-[#F3F4F6] text-gray-700 hover:bg-[#e9eaee]"
+              aria-label="Reset crop"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="mr-1 h-4 w-4" /> Reset
             </Button>
           </div>
 
-          <DialogFooter className="mt-6 flex justify-end gap-2">
+          <DialogFooter className="mt-6 flex items-center justify-end gap-2">
             <Button
               variant="ghost"
               onClick={() => {
@@ -409,20 +450,21 @@ export default function OBGYNProfile() {
                 setRawImageSrc(null)
                 setCropperOpen(false)
               }}
+              className="hover:bg-gray-50"
             >
-              <X className="w-4 h-4 mr-1" /> Cancel
+              <X className="mr-1 h-4 w-4" /> Cancel
             </Button>
             <Button
               onClick={confirmCropAndUpload}
               disabled={!croppedAreaPixels || uploading}
-              style={{ backgroundColor: "#E46B64", color: "white" }}
+              className="rounded-lg bg-[#E46B64] text-white hover:bg-[#de5d56]"
             >
-              {uploading ? "Uploading..." : <><Check className="w-4 h-4 mr-1" /> Save</>}
+              {uploading ? "Uploading..." : <><Check className="mr-1 h-4 w-4" /> Save</>}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }
 
@@ -437,13 +479,14 @@ const renderField = (
   toggleEdit: (key: keyof FormDataType) => void
 ) => {
   return (
-    <div className="w-full sm:w-[456px] mt-[-14px] px-3 py-2">
-      <div className="flex justify-between items-center mb-1">
-        <Label className="text-[17px] font-lato text-gray-700">{label}</Label>
+    <div className="w-full">
+      <div className="mb-1 flex items-center justify-between">
+        <Label className="font-lato text-[15px] font-medium text-gray-800">{label}</Label>
         <button
           type="button"
           onClick={() => (isEditing ? saveField(key) : toggleEdit(key))}
-          className="text-[17px] font-lato text-[#E46B64] hover:underline"
+          className="text-[13px] font-medium text-[#E46B64] underline-offset-2 hover:underline"
+          aria-label={isEditing ? `Save ${label}` : `Edit ${label}`}
         >
           {isEditing ? "Save" : "Edit"}
         </button>
@@ -452,10 +495,10 @@ const renderField = (
       {isEditing ? (
         key === "gender" ? (
           <Select value={value} onValueChange={(val) => handleChange("gender", val)}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-full rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#F4C9C6]">
               <SelectValue placeholder="Select gender" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-xl border border-gray-200 shadow-md">
               <SelectItem value="Male">Male</SelectItem>
               <SelectItem value="Female">Female</SelectItem>
               <SelectItem value="Other">Other</SelectItem>
@@ -467,7 +510,7 @@ const renderField = (
               {value?.map((hospital: string, i: number) => (
                 <span
                   key={i}
-                  className="bg-[#E5E7EB] text-[#616161] border border-[#616161] px-2 py-0.5 rounded-full text-sm font-semibold flex items-center gap-1"
+                  className="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-sm font-medium text-gray-700"
                 >
                   {hospital}
                   <button
@@ -478,7 +521,8 @@ const renderField = (
                         value.filter((_: string, idx: number) => idx !== i)
                       )
                     }
-                    className="text-xs ml-1 text-gray-600 hover:text-red-500"
+                    className="rounded-full px-1 text-xs text-gray-500 hover:bg-white hover:text-red-600"
+                    aria-label={`Remove ${hospital}`}
                   >
                     ✕
                   </button>
@@ -488,8 +532,8 @@ const renderField = (
 
             <Input
               type="text"
-              placeholder="Affiliated Hospitals"
-              className="w-full focus:outline-none focus:ring-0"
+              placeholder="Add an affiliated hospital and press Enter"
+              className="w-full rounded-lg border-gray-300 bg-white text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F4C9C6]"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault()
@@ -500,6 +544,7 @@ const renderField = (
                   }
                 }
               }}
+              aria-label="Add affiliated hospital"
             />
           </div>
         ) : (
@@ -507,20 +552,23 @@ const renderField = (
             type="text"
             value={value || ""}
             onChange={(e) => handleChange(key, e.target.value)}
-            className="w-full focus:outline-none focus:ring-0"
+            className="w-full rounded-lg border-gray-300 bg-white text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F4C9C6]"
+            aria-label={label}
           />
         )
       ) : (
         <div
-          className="border-b w-full text-[16px] font-lato px-2 py-1 rounded-sm border-gray-300 text-gray-500 cursor-pointer flex flex-wrap gap-2"
+          className="flex flex-wrap gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[15px] font-lato text-gray-700 hover:border-gray-300"
           onClick={() => toggleEdit(key)}
+          role="button"
+          aria-label={`Edit ${label}`}
         >
           {key === "affiliatedHospitals" ? (
             value?.length ? (
               value.map((hospital: string, i: number) => (
                 <span
                   key={i}
-                  className="bg-[#E5E7EB] text-[#616161] border border-[#616161] px-2 py-0.5 rounded-full text-sm font-semibold"
+                  className="rounded-full border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700"
                 >
                   {hospital}
                 </span>

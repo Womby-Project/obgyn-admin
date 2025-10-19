@@ -76,22 +76,31 @@ function capitalize(str?: string | null): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-/** Map risk → badge variant */
+/** Map risk → badge variant (must match your badge.tsx variant keys) */
 const riskToVariant = (
   raw?: string | null
 ): VariantProps<typeof badgeVariants>["variant"] => {
   const s = (raw ?? "").toString().trim().toLowerCase();
   switch (s) {
     case "low":
-      return "success" as any;
-    case "medium":
+      return "Low";
     case "moderate":
-      return "warning" as any;
+      return "Moderate";
     case "high":
-      return "destructive" as any;
+      return "High";
     default:
       return "secondary";
   }
+};
+
+// Optionally map mood → badge variant if you added them in badge.tsx
+const moodToVariant = (
+  mood?: string | null
+): VariantProps<typeof badgeVariants>["variant"] => {
+  const m = (mood ?? "").toLowerCase();
+  if (["anxious", "irritable", "sad"].some(x => m.includes(x))) return "moodAnxious";
+  if (["happy", "content", "joy"].some(x => m.includes(x))) return "moodHappy";
+  return "moodNeutral";
 };
 
 // ------------------------------------------------
@@ -139,7 +148,7 @@ export default function MaternalInsightsComponent() {
         return;
       }
 
-      // 2) Get latest WEEKLY insights (NOTE: switched from ai_insights → ai_weekly_insights)
+      // 2) Get latest WEEKLY insights
       const { data: weekly, error: weeklyErr } = await supabase
         .from("ai_weekly_insights")
         .select(
@@ -176,7 +185,7 @@ export default function MaternalInsightsComponent() {
         id: patientData.id,
         first_name: patientData.first_name ?? "",
         last_name: patientData.last_name ?? "",
-        risk_level: patientData.risk_level ?? null, // kept from patient_users (weekly job updates this)
+        risk_level: patientData.risk_level ?? null,
         patient_type: patientData.patient_type ?? null,
         pregnancy_weeks: patientData.pregnancy_weeks ?? null,
         trimester: getTrimester(patientData.pregnancy_weeks),
@@ -312,14 +321,18 @@ export default function MaternalInsightsComponent() {
                       <BreadcrumbItem>
                         <BreadcrumbLink
                           className="hover:underline cursor-pointer"
-                          onClick={() =>
-                            navigate(
-                              `/patientdirectory/profile?name=${encodeURIComponent(patientName || "")}`
-                            )
-                          }
+                          onClick={() => {
+                            if (!patientId) {
+                              navigate("/patientdirectory");
+                              return;
+                            }
+                            const q = patientName ? `?name=${encodeURIComponent(patientName)}` : "";
+                            navigate(`/patientdirectory/patientprofile/${patientId}${q}`);
+                          }}
                         >
                           Patient Profile
                         </BreadcrumbLink>
+
                       </BreadcrumbItem>
                       <BreadcrumbSeparator />
                       <BreadcrumbPage>Maternal Insights</BreadcrumbPage>
@@ -357,15 +370,18 @@ export default function MaternalInsightsComponent() {
 
               <CardContent>
                 {/* Top grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 ml-2 w-full mt-[-20px]">
-                  {/* Mood card */}
-                  <Card className="border border-gray-200 w-full min-h-[260px] bg-gray rounded-lg mt-5 flex flex-col justify-between">
-                    <div className="flex justify-between items-center ml-2">
-                      <CardTitle className="ml-3 text-[18px] font-lato font-semibold">Mood</CardTitle>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 ml-2 w-full ">
+                  {/* Mood Card */}
+                  <Card className="border border-gray-200 w-full min-h-[260px] bg-white rounded-xl mt-5 flex flex-col justify-between  transition-all duration-200">
+                    {/* Header */}
+                    <div className="flex justify-between items-center px-5 ">
+                      <CardTitle className="text-[18px] font-lato font-semibold text-gray-800">
+                        Mood
+                      </CardTitle>
 
                       <HoverCard>
                         <HoverCardTrigger asChild>
-                          <div className="mr-5 cursor-help">
+                          <div className="cursor-help" aria-label="What this mood section means">
                             <InsertEmoticonIcon
                               fontSize="medium"
                               className="text-[#F4B400] hover:text-[#d8a200] transition-transform duration-200 hover:scale-110"
@@ -377,46 +393,56 @@ export default function MaternalInsightsComponent() {
                           align="end"
                           className="text-[12px] font-medium rounded-md shadow-md bg-white border border-gray-200 p-3 w-[240px] text-gray-700 leading-snug"
                         >
-                          This section shows the patient’s most frequent mood patterns and highlights
-                          negative emotional trends.
+                          This section shows the patient’s most frequent mood patterns and highlights negative emotional trends.
                         </HoverCardContent>
                       </HoverCard>
                     </div>
 
-                    <p className="text-[16px] ml-5 mt-[-30px]">Most Common Mood:</p>
-                    <div className="ml-5 mt-[-40px] flex items-center gap-2">
-                      <Badge variant="moodAnxious" className="rounded-lg text-[14px]">
-                        {patient.maternalInsight.mostCommonMood.mood}
-                      </Badge>
-                      <span className="text-[12px] text-gray-600">
-                        {patient.maternalInsight.mostCommonMood.duration} days
-                      </span>
+                    {/* Most Common Mood */}
+                    <div className="px-5 mt-3">
+                      <p className="text-[15px] text-gray-700 font-medium">Most Common Mood</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Badge
+                          variant={moodToVariant(patient.maternalInsight.mostCommonMood.mood)}
+                          className="rounded-lg text-[13px] px-3 py-1 font-medium"
+                        >
+                          {patient.maternalInsight.mostCommonMood.mood}
+                        </Badge>
+                        <span className="text-[12px] text-gray-600">
+                          {patient.maternalInsight.mostCommonMood.duration} days
+                        </span>
+                      </div>
                     </div>
 
-                    <p className="text-[16px] ml-5 mt-[-25px]">Days with negative moods:</p>
-                    <div className="flex justify-between items-center ml-2 ">
-                      <span className="text-[30px] ml-5 font-bold text-[#EF4444] mt-[-35px]">
-                        {patient.maternalInsight.negativeMoodDays}
-                      </span>
-                      <span className="text-[12px] mr-10">out of 7 days</span>
+                    {/* Negative Mood Days */}
+                    <div className="px-5 mt-4">
+                      <p className="text-[15px] text-gray-700 font-medium">Days with Negative Moods</p>
+                      <div className="flex justify-between items-end mt-2">
+                        <span className="text-[32px] font-bold text-[#EF4444] leading-none">
+                          {patient.maternalInsight.negativeMoodDays}
+                        </span>
+                        <span className="text-[12px] text-gray-600 mb-1">out of 7 days</span>
+                      </div>
+                      <Progress
+                        value={(patient.maternalInsight.negativeMoodDays / 7) * 100}
+                        className="mt-3 h-2 bg-gray-200 rounded-full [&>div]:bg-[#EF4444]"
+                      />
                     </div>
 
-                    <Progress
-                      value={(patient.maternalInsight.negativeMoodDays / 7) * 100}
-                      className="ml-3 h-2 bg-gray-200 rounded-full mt-[-40px] [&>div]:bg-[#EF4444] w-[90%]"
-                    />
+                    {/* Footer spacing */}
+                    <div className="h-2"></div>
                   </Card>
 
                   {/* Symptoms card */}
-                  <Card className="border border-gray-200 w-full min-h-[260px] bg-gray rounded-lg mt-5 flex flex-col justify-between">
+                  <Card className="border border-gray-200 w-full min-h-[260px] bg-white rounded-lg mt-5 flex flex-col justify-between">
                     <div className="flex justify-between items-center ml-2">
-                      <CardTitle className="ml-3 text-[18px] font-lato font-semibold">
+                      <CardTitle className="ml-3 text-[18px] font-lato font-semibold mb-2">
                         Symptoms
                       </CardTitle>
 
                       <HoverCard>
                         <HoverCardTrigger asChild>
-                          <div className="mr-5 cursor-help">
+                          <div className="mr-5 cursor-help" aria-label="What this symptoms section means">
                             <SearchOutlinedIcon
                               fontSize="medium"
                               className="text-[#3B82F6] hover:text-[#2563EB] transition-transform duration-200 hover:scale-110"
@@ -435,8 +461,8 @@ export default function MaternalInsightsComponent() {
                     </div>
 
                     <p className="text-[16px] ml-5 mt-[-30px]">
-                      Most Frequent Symptom
-                      {patient.maternalInsight.mostFrequentSymptoms.length > 1 ? "s" : ""}:
+                      {/* label text only; behavior unchanged */}
+                      Logged {patient.maternalInsight.activities.length > 1 ? "Activities" : "Activity"}:
                     </p>
 
                     {patient.maternalInsight.mostFrequentSymptoms.length > 1 ? (
@@ -456,8 +482,8 @@ export default function MaternalInsightsComponent() {
                       </div>
                     )}
 
-                    <div className="flex flex-col  ">
-                      <span className="text-[16px] ml-5 ">Severe Symptoms:</span>
+                    <div className="flex flex-col">
+                      <span className="text-[16px] ml-5">Severe Symptoms:</span>
                       <span className="gap-2">
                         <ReportProblemOutlinedIcon fontSize="small" className="text-red-800 ml-5" />
                         {patient.maternalInsight.severeSymptoms}
@@ -466,7 +492,7 @@ export default function MaternalInsightsComponent() {
                   </Card>
 
                   {/* Physical Activities */}
-                  <Card className="border border-gray-200 w-full min-h-[260px] bg-gray rounded-lg mt-5 flex flex-col justify-between">
+                  <Card className="border border-gray-200 w-full min-h-[260px] bg-white rounded-lg mt-5 flex flex-col justify-between">
                     <div className="flex justify-between items-center ml-2">
                       <CardTitle className="ml-3 text-[18px] font-lato font-semibold">
                         Physical Activities
@@ -474,7 +500,7 @@ export default function MaternalInsightsComponent() {
 
                       <HoverCard>
                         <HoverCardTrigger asChild>
-                          <div className="mr-5 cursor-help">
+                          <div className="mr-5 cursor-help" aria-label="What this activities section means">
                             <DirectionsWalkOutlinedIcon
                               fontSize="medium"
                               className="text-[#10B981] hover:text-[#059669] transition-transform duration-200 hover:scale-110"
@@ -493,8 +519,7 @@ export default function MaternalInsightsComponent() {
                     </div>
 
                     <p className="text-[16px] ml-5 mt-[-30px]">
-                      Logged Activit
-                      {patient.maternalInsight.activities.length > 1 ? "ies" : "y"}:
+                      Logged {patient.maternalInsight.activities.length > 1 ? "Activities" : "Activity"}:
                     </p>
 
                     {patient.maternalInsight.activities.length > 1 ? (
@@ -519,7 +544,7 @@ export default function MaternalInsightsComponent() {
 
                     <Progress
                       value={(patient.maternalInsight.activityFrequency / 7) * 100}
-                      className="ml-3 h-2 bg-gray-200 rounded-full  mt-[-40px] [&>div]:bg-[#22C55E] w-[90%]"
+                      className="ml-3 h-2 bg-gray-200 rounded-full mt-[-40px] [&>div]:bg-[#22C55E] w-[90%]"
                     />
                   </Card>
                 </div>
@@ -527,11 +552,11 @@ export default function MaternalInsightsComponent() {
                 {/* Alerts + Insights + Recommendations */}
                 <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 mt-6 px-2 w-full">
                   {/* Priority Alerts */}
-                  <Card className="lg:col-span-2 border border-gray-200 w-full bg-gray rounded-lg p-4 h-[400px] flex flex-col gap-4">
+                  <Card className="lg:col-span-2 border border-gray-200 w-full bg-white rounded-lg p-4 h-[400px] flex flex-col gap-4">
                     <div className="flex items-center gap-2 ml-2 mt-3">
                       <HoverCard>
                         <HoverCardTrigger asChild>
-                          <div className="cursor-help">
+                          <div className="cursor-help" aria-label="What priority alerts mean">
                             <Icon
                               icon="mdi:chat-alert"
                               className="text-[#C03636] w-6 h-6 hover:text-red-700 transition-transform duration-200 hover:scale-110"
@@ -593,11 +618,11 @@ export default function MaternalInsightsComponent() {
 
                   {/* Insights + AI */}
                   <div className="lg:col-span-4 flex flex-col gap-4">
-                    <Card className="border border-gray-200 w-full bg-gray rounded-lg flex flex-col p-4">
+                    <Card className="border border-gray-200 w-full bg-white rounded-lg flex flex-col p-4">
                       <div className="flex items-center mb-2">
                         <HoverCard>
                           <HoverCardTrigger asChild>
-                            <div className="cursor-help">
+                            <div className="cursor-help" aria-label="What key insights mean">
                               <InsightsIcon
                                 fontSize="medium"
                                 className="text-[#E2AF11] hover:text-yellow-600 transition-transform duration-200 hover:scale-110"
@@ -635,11 +660,11 @@ export default function MaternalInsightsComponent() {
                       )}
                     </Card>
 
-                    <Card className="border border-gray-200 w-full bg-gray rounded-lg flex flex-col p-4">
+                    <Card className="border border-gray-200 w-full bg-white rounded-lg flex flex-col p-4">
                       <div className="flex items-center mb-2">
                         <HoverCard>
                           <HoverCardTrigger asChild>
-                            <div className="cursor-help">
+                            <div className="cursor-help" aria-label="What AI recommendations mean">
                               <Icon
                                 icon="ri:chat-ai-fill"
                                 className="text-[#4CAF50] w-5 h-5 md:w-6 md:h-6 hover:text-green-600 transition-transform duration-200 hover:scale-110"
@@ -681,7 +706,7 @@ export default function MaternalInsightsComponent() {
 
                 {/* ---------------- Doctor's Note ---------------- */}
                 <div className="grid grid-cols-1 gap-4 mt-6 px-2 w-full">
-                  <Card className="border border-gray-200 w-full bg-gray rounded-lg flex flex-col p-4">
+                  <Card className="border border-gray-200 w-full bg-white rounded-lg flex flex-col p-4">
                     <div className="flex items-center ">
                       <Icon icon="ph:note-fill" className="w-6 h-6" style={{ color: "#E46B64" }} />
                       <CardTitle className="ml-3 text-[20px] font-lato font-semibold" style={{ color: "#E46B64" }}>
@@ -694,13 +719,14 @@ export default function MaternalInsightsComponent() {
                     </CardDescription>
 
                     <textarea
-                      className=" w-full min-h[140px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] p-3 text-[14px] text-gray-800"
+                      className="w-full min-h-[140px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] p-3 text-[14px] text-gray-800"
                       placeholder="Enter your personalized notes about the patient here."
                       value={doctorsNote}
                       onChange={(e) => setDoctorsNote(e.target.value)}
+                      aria-label="Doctor’s note"
                     />
 
-                    <div className=" flex items-start gap-2">
+                    <div className="flex items-start gap-2">
                       <input
                         id="shareWithPatient"
                         type="checkbox"
@@ -715,9 +741,11 @@ export default function MaternalInsightsComponent() {
 
                     <div className="mt-4 flex items-center gap-3">
                       <button
+                        type="button"
                         onClick={handleSaveNote}
                         disabled={saving}
-                        className="inline-flex items-center gap-2 cursor-pointer rounded-md px-4 p text-white transition-colors disabled:opacity-70 h-10 w-27"
+                        aria-busy={saving}
+                        className="inline-flex items-center gap-2 cursor-pointer rounded-md px-4 py-2 text-white transition-colors disabled:opacity-70 h-10"
                         style={{ backgroundColor: "#E46B64" }}
                         onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#E46B64")}
                         onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.backgroundColor = "#E46B64")}
@@ -726,7 +754,11 @@ export default function MaternalInsightsComponent() {
                         {saving ? "Saving..." : "Save"}
                       </button>
 
-                      {saveMsg && <span className="text-[13px] text-gray-600">{saveMsg}</span>}
+                      {saveMsg && (
+                        <span className="text-[13px] text-gray-600" aria-live="polite">
+                          {saveMsg}
+                        </span>
+                      )}
                     </div>
                   </Card>
                 </div>

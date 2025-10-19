@@ -15,25 +15,34 @@ export default function ArchiveContent({ onViewArticle }: { onViewArticle: (arti
   useEffect(() => {
     (async () => {
       setLoading(true);
+
+      // NOTE: replaced updated_at with created_at (exists in your schema)
       const { data, error } = await supabase
         .from('articles')
-        .select('id,title,excerpt,thumbnail_url,views_count,author,source,updated_at')
+        .select('id,title,excerpt,thumbnail_url,views_count,author,source,created_at,published_at,status')
         .eq('status', 'Archived')
-        .order('updated_at', { ascending: false });
+        .order('created_at', { ascending: false }); // or 'published_at'
 
-      if (!error && data) {
-        const mapped: Article[] = data.map((row) => ({
-          id: row.id,
-          title: row.title,
-          description: row.excerpt ?? '',
-          imageUrl: row.thumbnail_url ?? '',
-          views: row.views_count ?? 0,
-          author: row.author ?? undefined,
-          source: row.source ?? undefined,
-          archivedDate: fmt(row.updated_at),
-        }));
-        setItems(mapped);
+      if (error) {
+        console.error('Archive fetch error:', error);
+        setItems([]);
+        setLoading(false);
+        return;
       }
+
+      const mapped: Article[] = (data ?? []).map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        description: row.excerpt ?? '',
+        imageUrl: row.thumbnail_url ?? '',
+        views: row.views_count ?? 0,
+        author: row.author ?? undefined,
+        source: row.source ?? undefined,
+        // choose which date to show for “archived”; here we prefer created_at, fallback to published_at
+        archivedDate: fmt(row.created_at ?? row.published_at),
+      }));
+
+      setItems(mapped);
       setLoading(false);
     })();
   }, []);
@@ -43,7 +52,12 @@ export default function ArchiveContent({ onViewArticle }: { onViewArticle: (arti
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {items.map(article => (
-        <ArticleCard key={article.id} article={article} variant="archived" onViewArticle={onViewArticle} />
+        <ArticleCard
+          key={article.id}
+          article={article}
+          variant="archived"
+          onViewArticle={onViewArticle}
+        />
       ))}
     </div>
   );

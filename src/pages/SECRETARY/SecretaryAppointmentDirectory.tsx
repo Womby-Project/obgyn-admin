@@ -17,7 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Alert, AlertTitle } from "@/components/ui/alert";
-
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -29,39 +28,19 @@ import {
   PaginationNext,
 } from "@/components/ui/pagination";
 import { Icon } from "@iconify/react";
-import { supabase } from "@/lib/supabaseClient"; // adjust path
+import { supabase } from "@/lib/supabaseClient";
 import RescheduleDialog from "../../components/modals/rescheduleModal";
 import { Button } from "../../components/ui/button";
 import FollowUpDialog from "@/components/modals/followupModal";
 import { Toaster } from "../../components/ui/sonner";
 import { useNavigate } from "react-router-dom";
 
-const itemsPerPage = 10;
-const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
-
-type AppointmentRow = {
-  id: string;
-  status: string;
-  appointment_type: string | null;
-  appointment_datetime: string;
-  patient: {
-    id: string;
-    first_name: string;
-    last_name: string;
-    patient_type: string;
-    pregnancy_weeks: number | null;
-  } | null;
-  followups: {
-    id: string;
-    follow_up_datetime: string;
-    reason: string | null;
-  }[];
-};
-
-type AppointmentUIRow = {
+/** ---- IMPORTANT: keep this shape in-sync with both modals ---- */
+export type AppointmentUIRow = {
   id: string;
   patientId: string | null;
   patient: string;
+  /** number for weeks or "-" when unknown */
   weeksPregnant: number | string;
   date: string;
   time: string;
@@ -71,6 +50,53 @@ type AppointmentUIRow = {
   patientType: string;
 };
 
+const itemsPerPage = 10;
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+type PatientLite = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  patient_type: string | null;
+  pregnancy_weeks: number | null;
+  postpartum_weeks: number | null;
+  birth_date: string | null;
+};
+
+type AppointmentRow = {
+  id: string;
+  status: string;
+  appointment_type: string | null;
+  appointment_datetime: string;
+  patient: PatientLite | null;
+  followups: { id: string; follow_up_datetime: string; reason: string | null }[];
+};
+
+function weeksBetween(fromISO: string) {
+  const from = new Date(fromISO);
+  const ms = Date.now() - from.getTime();
+  if (Number.isNaN(ms)) return null;
+  return Math.max(0, Math.floor(ms / (7 * 24 * 60 * 60 * 1000)));
+}
+
+function computeWeeksValue(p: PatientLite | null): number | string {
+  if (!p) return "-";
+  const t = (p.patient_type || "").toLowerCase();
+
+  if (t.includes("postpartum")) {
+    let w =
+      typeof p.postpartum_weeks === "number" ? p.postpartum_weeks : null;
+    if ((w === null || w === undefined) && p.birth_date) {
+      const derived = weeksBetween(p.birth_date);
+      if (typeof derived === "number") w = derived;
+    }
+    return typeof w === "number" ? w : "-";
+  }
+
+  if (typeof p.pregnancy_weeks === "number") return p.pregnancy_weeks;
+  return "-";
+}
+
 export default function SecretaryAppointmentDirectory() {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,13 +105,12 @@ export default function SecretaryAppointmentDirectory() {
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [sortOption, setSortOption] = useState("");
-  const navigate = useNavigate();
-
   const [openReschedule, setOpenReschedule] = useState(false);
   const [openFollowUp, setOpenFollowUp] = useState(false);
   const [selectedAppointment, setSelectedAppointment] =
-    useState<AppointmentUIRow | null>(null);
+    useState<AppointmentUIRow | undefined>(undefined);
   const [actionValue, setActionValue] = useState("");
+  const navigate = useNavigate();
 
   const fetchAppointments = async () => {
     setLoading(true);
@@ -95,20 +120,18 @@ export default function SecretaryAppointmentDirectory() {
       error: userError,
     } = await supabase.auth.getUser();
     if (userError || !user) {
-      console.error("Error fetching user:", userError?.message);
       setAppointments([]);
       setLoading(false);
       return;
     }
 
-    const { data: secUser, error: secError } = await supabase
+    const { data: secUser } = await supabase
       .from("secretary_users")
       .select("obgyn_id")
       .eq("id", user.id)
       .single();
 
-    if (secError || !secUser) {
-      console.warn("User is not a secretary or no obgyn_id found");
+    if (!secUser?.obgyn_id) {
       setAppointments([]);
       setLoading(false);
       return;
@@ -116,7 +139,8 @@ export default function SecretaryAppointmentDirectory() {
 
     const { data, error } = await supabase
       .from("appointments")
-      .select(`
+      .select(
+        `
         id,
         appointment_datetime,
         status,
@@ -126,6 +150,8 @@ export default function SecretaryAppointmentDirectory() {
           first_name,
           last_name,
           pregnancy_weeks,
+          postpartum_weeks,
+          birth_date,
           patient_type
         ),
         followups:appointment_followups (
@@ -133,25 +159,26 @@ export default function SecretaryAppointmentDirectory() {
           follow_up_datetime,
           reason
         )
-      `)
+      `
+      )
       .eq("obgyn_id", secUser.obgyn_id)
       .order("appointment_datetime", { ascending: true });
 
     if (error) {
-      console.error("❌ Error fetching appointments:", error.message);
       setAppointments([]);
       setLoading(false);
       return;
     }
 
-    const normalized = (data ?? []).map((appt: any) => {
-      const followups = (appt.followups ?? []).slice().sort((a: any, b: any) => {
-        return (
-          new Date(b.follow_up_datetime).getTime() -
-          new Date(a.follow_up_datetime).getTime()
+    const normalized = (data ?? []).map((a: any) => {
+      const followups = (a.followups ?? [])
+        .slice()
+        .sort(
+          (x: any, y: any) =>
+            new Date(y.follow_up_datetime).getTime() -
+            new Date(x.follow_up_datetime).getTime()
         );
-      });
-      return { ...appt, followups };
+      return { ...a, followups };
     });
 
     const statusPriority: Record<string, number> = {
@@ -185,18 +212,12 @@ export default function SecretaryAppointmentDirectory() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "appointment_followups" },
-        (payload) => {
-          console.log("New follow-up created:", payload.new);
-          fetchAppointments();
-        }
+        fetchAppointments
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "appointments" },
-        (payload) => {
-          console.log("Appointment updated:", payload.new);
-          fetchAppointments();
-        }
+        fetchAppointments
       )
       .subscribe();
 
@@ -205,53 +226,6 @@ export default function SecretaryAppointmentDirectory() {
     };
   }, []);
 
-  const updateAppointmentStatus = async (
-    id: string,
-    status: string,
-    patientId?: string,
-    appointmentDateTime?: Date
-  ) => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { error } = await supabase
-      .from("appointments")
-      .update({ status })
-      .eq("id", id);
-
-    if (error) {
-      console.error("Error updating appointment status:", error.message);
-    } else {
-      const dateStr = appointmentDateTime?.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-
-      const timeStr = appointmentDateTime?.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-      await sendNotification({
-        recipientId: patientId!,
-        triggeredBy: user.id,
-        type: "appointment_update",
-        title: status === "Done" ? "Appointment Completed" : "Appointment Accepted",
-        message:
-          status === "Done"
-            ? "Your appointment has been marked as done."
-            : `Your appointment has been accepted by the secretary for ${dateStr} at ${timeStr}.`,
-        relatedAppointmentId: id,
-      });
-
-      await fetchAppointments();
-    }
-  };
-
-  // NOTIFICATION
   const sendNotification = async ({
     recipientId,
     triggeredBy,
@@ -282,24 +256,16 @@ export default function SecretaryAppointmentDirectory() {
           related_followup_id: relatedFollowupId,
         },
       ]);
+      if (error) return;
 
-      if (error) {
-        console.error("❌ Error inserting notification:", error.message);
-        return;
-      }
-
-      const { data: userData, error: userError } = await supabase
+      const { data: userData } = await supabase
         .from("patient_users")
         .select("push_token")
         .eq("id", recipientId)
         .single();
 
-      if (userError || !userData?.push_token) {
-        console.warn("⚠️ No push token found for user:", recipientId);
-        return;
-      }
-
-      const pushToken = userData.push_token;
+      const pushToken = userData?.push_token;
+      if (!pushToken) return;
 
       await fetch("https://exp.host/--/api/v2/push/send", {
         method: "POST",
@@ -312,10 +278,49 @@ export default function SecretaryAppointmentDirectory() {
           data: { relatedAppointmentId, relatedFollowupId, type },
         }),
       });
+    } catch {}
+  };
 
-      console.log("✅ Push notification sent to device");
-    } catch (err) {
-      console.error("❌ Error sending notification:", err);
+  const updateAppointmentStatus = async (
+    id: string,
+    status: string,
+    patientId?: string,
+    appointmentDateTime?: Date
+  ) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("appointments")
+      .update({ status })
+      .eq("id", id);
+
+    if (!error && patientId) {
+      const dateStr = appointmentDateTime?.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+      const timeStr = appointmentDateTime?.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      await sendNotification({
+        recipientId: patientId,
+        triggeredBy: user.id,
+        type: "appointment_update",
+        title: status === "Done" ? "Appointment Completed" : "Appointment Accepted",
+        message:
+          status === "Done"
+            ? "Your appointment has been marked as done."
+            : `Your appointment has been accepted for ${dateStr} at ${timeStr}.`,
+        relatedAppointmentId: id,
+      });
+
+      await fetchAppointments();
     }
   };
 
@@ -326,13 +331,15 @@ export default function SecretaryAppointmentDirectory() {
         ? new Date(latestFollowup.follow_up_datetime)
         : new Date(a.appointment_datetime);
 
+      const weeksPregnant = computeWeeksValue(a.patient);
+
       return {
         id: a.id,
         patientId: a.patient?.id ?? null,
         patient: a.patient
           ? `${a.patient.first_name} ${a.patient.last_name}`
           : "Unknown Patient",
-        weeksPregnant: a.patient?.pregnancy_weeks ?? "-",
+        weeksPregnant,
         patientType: a.patient?.patient_type ?? "N/A",
         date: latestDate.toLocaleDateString("en-US", {
           year: "numeric",
@@ -350,7 +357,6 @@ export default function SecretaryAppointmentDirectory() {
     });
   }, [appointments]);
 
-  // Filters + search
   const filteredAppointments = useMemo(() => {
     let filtered = [...mappedAppointments];
     if (search) {
@@ -397,12 +403,11 @@ export default function SecretaryAppointmentDirectory() {
                   View all patient appointments
                 </h2>
 
-                {/* Filters */}
                 <div className="flex flex-wrap gap-4 mt-5 w-full justify-between">
                   <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                     <div className="relative w-full sm:w-[300px]">
                       <SearchIcon
-                        className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
                         fontSize="small"
                       />
                       <Input
@@ -412,11 +417,10 @@ export default function SecretaryAppointmentDirectory() {
                         onChange={(e) => setSearch(e.target.value)}
                       />
                     </div>
+
                     <Select
                       value={statusFilter}
-                      onValueChange={(value) =>
-                        setStatusFilter(value === "allstatus" ? "" : value)
-                      }
+                      onValueChange={(v) => setStatusFilter(v === "allstatus" ? "" : v)}
                     >
                       <SelectTrigger className="w-[120px] border border-gray-300">
                         <SelectValue placeholder="Status" />
@@ -428,11 +432,10 @@ export default function SecretaryAppointmentDirectory() {
                         <SelectItem value="pending">Pending</SelectItem>
                       </SelectContent>
                     </Select>
+
                     <Select
                       value={typeFilter}
-                      onValueChange={(value) =>
-                        setTypeFilter(value === "alltypes" ? "" : value)
-                      }
+                      onValueChange={(v) => setTypeFilter(v === "alltypes" ? "" : v)}
                     >
                       <SelectTrigger className="w-[140px] border border-gray-300">
                         <SelectValue placeholder="Type" />
@@ -445,6 +448,7 @@ export default function SecretaryAppointmentDirectory() {
                       </SelectContent>
                     </Select>
                   </div>
+
                   <Select value={sortOption} onValueChange={setSortOption}>
                     <SelectTrigger className="w-full sm:w-[120px] border border-gray-300 px-2 flex justify-between">
                       <SelectValue placeholder="Sort" />
@@ -458,179 +462,152 @@ export default function SecretaryAppointmentDirectory() {
                 </div>
               </div>
 
-              {/* Table */}
               <div className="w-full">
                 {loading ? (
-                  <div className="flex items-center  justify-center gap-2">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600 "></div>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600 " />
                     <p className="text-sm text-gray-500">Loading appointments...</p>
                   </div>
                 ) : hasAppointments ? (
-                  <>
-                    {/* Desktop Table */}
-                    <div className="hidden md:block overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="min-w-[160px]">Patient</TableHead>
-                            <TableHead className="min-w-[180px]">Date & Time</TableHead>
-                            <TableHead className="min-w-[140px]">Type</TableHead>
-                            <TableHead className="min-w-[160px]">
-                              Appointment Status
-                            </TableHead>
-                            <TableHead className="min-w-[100px] text-left">
-                              Actions
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody className="font-lato text-[12px]">
-                          {paginatedAppointments.map((appt) => (
-                            <TableRow key={appt.id}>
-                              <TableCell>
-                                <div className="flex flex-col">
-                                  <button
-                                    onClick={() =>
-                                      appt.patientId &&
-                                      navigate(
-                                        `/secretarydashboard/appointmentdirectory/patientprofile/${appt.patientId}`
-                                      )
-                                    }
-                                    className=" cursor-pointer font-lato text-[15px] text-left text-[#1F2937] hover:underline hover:text-[#1F2937]"
-                                  >
-                                    {appt.patient}
-                                  </button>
-                                  <span className="text-[12px] text-gray-600">
-                                    {appt.patientType}, {appt.weeksPregnant} weeks{" "}
-                                  </span>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex flex-col">
-                                  <span className="text-[15px]">{appt.date}</span>
-                                  <span className="text-[13px] text-muted-foreground">
-                                    {appt.time}
-                                  </span>
-                                </div>
-                              </TableCell>
-                              <TableCell>{appt.type}</TableCell>
-                              <TableCell>
-                                <Badge variant={appt.status.toLowerCase() as any}>
-                                  {capitalize(appt.status)}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-left flex items-center gap-2">
-                                {/* Accept button */}
-                                <Button
-                                  className="w-8 h-8 bg-[#22C55E] border border-[#1FB355] cursor-pointer"
-                                  variant="ghost"
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="min-w-[160px]">Patient</TableHead>
+                          <TableHead className="min-w-[180px]">Date & Time</TableHead>
+                          <TableHead className="min-w-[140px]">Type</TableHead>
+                          <TableHead className="min-w-[160px]">
+                            Appointment Status
+                          </TableHead>
+                          <TableHead className="min-w-[100px] text-left">
+                            Actions
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="font-lato text-[12px]">
+                        {paginatedAppointments.map((appt) => (
+                          <TableRow key={appt.id}>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <button
                                   onClick={() =>
-                                    updateAppointmentStatus(
-                                      appt.id,
-                                      "Accepted",
-                                      appt.patientId!,
-                                      appt.dateTime
+                                    appt.patientId &&
+                                    navigate(
+                                      `/secretarydashboard/appointmentdirectory/patientprofile/${appt.patientId}`
                                     )
                                   }
-                                  disabled={appt.status !== "Pending"}
+                                  className="cursor-pointer font-lato text-[15px] text-left text-[#1F2937] hover:underline"
                                 >
-                                  <Icon
-                                    icon="mingcute:check-fill"
-                                    className="text-white font-bold"
-                                  />
-                                </Button>
+                                  {appt.patient}
+                                </button>
+                                <span className="text-[12px] text-gray-600">
+                                  {appt.patientType},{" "}
+                                  {appt.weeksPregnant === "-"
+                                    ? "-"
+                                    : `${appt.weeksPregnant} weeks`}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="text-[15px]">{appt.date}</span>
+                                <span className="text-[13px] text-muted-foreground">
+                                  {appt.time}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{appt.type}</TableCell>
+                            <TableCell>
+                              <Badge variant={appt.status.toLowerCase() as any}>
+                                {capitalize(appt.status)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-left flex items-center gap-2">
+                              <Button
+                                className="w-8 h-8 bg-[#22C55E] border border-[#1FB355]"
+                                variant="ghost"
+                                onClick={() =>
+                                  updateAppointmentStatus(
+                                    appt.id,
+                                    "Accepted",
+                                    appt.patientId ?? undefined,
+                                    appt.dateTime
+                                  )
+                                }
+                                disabled={appt.status !== "Pending"}
+                              >
+                                <Icon icon="mingcute:check-fill" className="text-white" />
+                              </Button>
 
-                                {/* Actions menu (Reschedule / Follow-up / Mark as Done) */}
-                                <Select
-                                  value={actionValue}
-                                  onValueChange={async (value) => {
-                                    setSelectedAppointment(appt);
-
-                                    if (value === "resched") {
-                                      setOpenReschedule(true);
-                                    } else if (value === "follow") {
-                                      setOpenFollowUp(true);
-                                    } else if (value === "done") {
-                                      // move Done action here
-                                      await updateAppointmentStatus(
-                                        appt.id,
-                                        "Done",
-                                        appt.patientId!,
-                                        appt.dateTime
-                                      );
-                                    }
-
-                                    setActionValue("");
-                                  }}
-                                  disabled={appt.status === "Declined"}
+                              <Select
+                                value={actionValue}
+                                onValueChange={async (value) => {
+                                  setSelectedAppointment(appt);
+                                  if (value === "resched") setOpenReschedule(true);
+                                  else if (value === "follow") setOpenFollowUp(true);
+                                  else if (value === "done") {
+                                    await updateAppointmentStatus(
+                                      appt.id,
+                                      "Done",
+                                      appt.patientId ?? undefined,
+                                      appt.dateTime
+                                    );
+                                  }
+                                  setActionValue("");
+                                }}
+                                disabled={appt.status === "Declined"}
+                              >
+                                <SelectTrigger
+                                  className={`w-8 h-8 flex items-center justify-center rounded-lg border border-[#DBDEE2]
+[&>svg.lucide-chevron-down]:hidden bg-white hover:bg-gray-50`}
                                 >
-                                  <SelectTrigger
-                                    className={`w-8 h-8 flex items-center justify-center rounded-lg border border-[#DBDEE2] 
-[&>svg.lucide-chevron-down]:hidden
-bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer`}
+                                  <Icon icon="uiw:more" className="w-5 h-5 text-gray-600" />
+                                </SelectTrigger>
+                                <SelectContent className="w-[230px] border border-gray-200 shadow-md rounded-lg mr-28">
+                                  <SelectItem
+                                    value="resched"
+                                    className="pr-2 [&>span:first-child]:hidden"
                                   >
-                                    <Icon
-                                      icon="uiw:more"
-                                      className="w-5 h-5 text-gray-600"
-                                    />
-                                  </SelectTrigger>
-                                  <SelectContent className="w-[230px] border border-gray-200 shadow-md rounded-lg mr-28">
-                                    <SelectItem
-                                      value="resched"
-                                      className="pr-2 [&>span:first-child]:hidden"
-                                    >
-                                      <div className="flex items-center gap-2 text-[#6B7280]">
-                                        <Icon
-                                          icon="pepicons-pop:rewind-time"
-                                          className="w-5 h-5 text-gray-600"
-                                        />
-                                        <p className="text-[15px]">Reschedule</p>
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem
-                                      value="follow"
-                                      className="pr-2 [&>span:first-child]:hidden"
-                                    >
-                                      <div className="flex items-center gap-2 text-[#6B7280] font-lato">
-                                        <Icon
-                                          icon="mdi:calendar"
-                                          className="w-5 h-5 text-gray-600"
-                                        />
-                                        <p className="text-[15px]">
-                                          Schedule for Follow-up
-                                        </p>
-                                      </div>
-                                    </SelectItem>
+                                    <div className="flex items-center gap-2 text-[#6B7280]">
+                                      <Icon icon="pepicons-pop:rewind-time" className="w-5 h-5" />
+                                      <p className="text-[15px]">Reschedule</p>
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem
+                                    value="follow"
+                                    className="pr-2 [&>span:first-child]:hidden"
+                                  >
+                                    <div className="flex items-center gap-2 text-[#6B7280]">
+                                      <Icon icon="mdi:calendar" className="w-5 h-5" />
+                                      <p className="text-[15px]">Schedule for Follow-up</p>
+                                    </div>
+                                  </SelectItem>
 
-                                    {/* Mark as Done inside menu */}
-                                    {["Accepted", "Rescheduled", "Follow-up"].includes(
-                                      appt.status
-                                    ) && (
-                                      <SelectItem
-                                        value="done"
-                                        className="pr-2 [&>span:first-child]:hidden"
-                                      >
-                                        <div className="flex items-center gap-2 text-green-700 font-lato">
-                                          <Icon
-                                            icon="gg:check-o"
-                                            className="w-5 h-5"
-                                          />
-                                          <p className="text-[15px]">Mark as Done</p>
-                                        </div>
-                                      </SelectItem>
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </>
+                                  {["Accepted", "Rescheduled", "Follow-up"].includes(
+                                    appt.status
+                                  ) && (
+                                    <SelectItem
+                                      value="done"
+                                      className="pr-2 [&>span:first-child]:hidden"
+                                    >
+                                      <div className="flex items-center gap-2 text-green-700">
+                                        <Icon icon="gg:check-o" className="w-5 h-5" />
+                                        <p className="text-[15px]">Mark as Done</p>
+                                      </div>
+                                    </SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 ) : (
                   <div className="flex justify-center items-center h-40 w-full">
                     <Alert className="flex items-center gap-3 px-4 py-3 w-fit border border-gray-300">
-                      <Icon icon="tabler:face-id-error" className="w-5 h-5 " />
+                      <Icon icon="tabler:face-id-error" className="w-5 h-5" />
                       <div>
                         <AlertTitle className="text-sm font-medium">
                           No appointments to display
@@ -641,7 +618,6 @@ bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cu
                 )}
               </div>
 
-              {/* Pagination */}
               {hasAppointments && !loading && (
                 <div className="w-full flex flex-col sm:flex-row items-center justify-between text-[#616161] mt-6">
                   <p className="text-[12px] font-semibold text-muted-foreground whitespace-nowrap">
@@ -655,7 +631,7 @@ bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cu
                       <PaginationItem>
                         <PaginationPrevious
                           onClick={() =>
-                            setCurrentPage((prev) => Math.max(prev - 1, 1))
+                            setCurrentPage((p) => Math.max(p - 1, 1))
                           }
                           className={
                             currentPage === 1
@@ -682,9 +658,7 @@ bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cu
                       <PaginationItem>
                         <PaginationNext
                           onClick={() =>
-                            setCurrentPage((prev) =>
-                              Math.min(prev + 1, totalPages)
-                            )
+                            setCurrentPage((p) => Math.min(p + 1, totalPages))
                           }
                           className={
                             currentPage === totalPages
@@ -706,39 +680,10 @@ bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cu
       <RescheduleDialog
         open={openReschedule}
         onClose={() => setOpenReschedule(false)}
-        appointment={selectedAppointment ?? undefined}
-        onConfirm={async (newDateTime) => {
-          if (!selectedAppointment) return;
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
-          if (!user) return;
-
-          const { error } = await supabase
-            .from("appointments")
-            .update({
-              appointment_datetime: newDateTime,
-              status: "Rescheduled",
-            })
-            .eq("id", selectedAppointment.id);
-
-          if (error) {
-            console.error("Error rescheduling appointment:", error.message);
-          } else {
-            await sendNotification({
-              recipientId: selectedAppointment.patientId!,
-              triggeredBy: user.id,
-              type: "appointment_update",
-              title: "Appointment Rescheduled",
-              message: `Your appointment was rescheduled to ${new Date(
-                newDateTime
-              ).toLocaleString()}.`,
-              relatedAppointmentId: selectedAppointment.id,
-            });
-
-            await fetchAppointments();
-            setOpenReschedule(false);
-          }
+        appointment={selectedAppointment}
+        onConfirm={async () => {
+          await fetchAppointments();
+          setOpenReschedule(false);
         }}
       />
 
@@ -746,7 +691,7 @@ bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 cu
       <FollowUpDialog
         open={openFollowUp}
         onClose={() => setOpenFollowUp(false)}
-        appointment={selectedAppointment || undefined}
+        appointment={selectedAppointment}
         onConfirm={() => {
           fetchAppointments();
         }}

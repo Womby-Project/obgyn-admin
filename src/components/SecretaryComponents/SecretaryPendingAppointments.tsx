@@ -6,19 +6,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
 import { useNavigate } from "react-router-dom";
+
+type PatientMini = {
+  first_name: string;
+  last_name: string;
+  pregnancy_weeks: number | null;
+  postpartum_weeks: number | null;
+} | null;
 
 type Appointment = {
   id: string;
-  appointment_datetime: string;
-  status: string;
-  appointment_type: string;
-  patient_users: {
-    first_name: string;
-    last_name: string;
-     pregnancy_weeks: number | null;
-  } | null;
+  appointment_datetime: string; // timestamptz
+  status: string;               // appointment_status_enum in DB
+  appointment_type: string;     // NOT NULL in schema
+  patient: PatientMini;         // joined patient
 };
 
 export default function PendingAppointmentsPanel() {
@@ -32,29 +34,30 @@ export default function PendingAppointmentsPanel() {
       try {
         const { data, error } = await supabase
           .from("appointments")
-          .select(
-            `
+          .select(`
             id,
             appointment_datetime,
             status,
             appointment_type,
-            patient_users (
+            patient:patient_users (
               first_name,
               last_name,
-              pregnancy_weeks
+              pregnancy_weeks,
+              postpartum_weeks
             )
-          `
-          )
+          `)
           .eq("status", "Pending")
           .order("appointment_datetime", { ascending: true });
 
         if (error) {
           console.error("Error fetching pending appointments:", error);
+          setAppointments([]);
         } else {
-          setAppointments(data as unknown as Appointment[] || []);
+          setAppointments((data ?? []) as unknown as Appointment[]);
         }
       } catch (err) {
         console.error("Unexpected error:", err);
+        setAppointments([]);
       } finally {
         setLoading(false);
       }
@@ -63,21 +66,32 @@ export default function PendingAppointmentsPanel() {
     fetchAppointments();
   }, []);
 
-  const formatWeeks = (weeks: number | null) => {
-    if (!weeks) return "N/A";
-    return `${weeks} week${weeks > 1 ? "s" : ""}`;
+  const formatPhase = (
+    pregnancyWeeks?: number | null,
+    postpartumWeeks?: number | null
+  ) => {
+    if (typeof pregnancyWeeks === "number") {
+      const w = Math.max(0, pregnancyWeeks);
+      return `Pregnancy • ${w} week${w === 1 ? "" : "s"}`;
+    }
+    if (typeof postpartumWeeks === "number") {
+      const w = Math.max(0, postpartumWeeks);
+      return `Postpartum • ${w} week${w === 1 ? "" : "s"}`;
+    }
+    return "N/A";
   };
 
   return (
     <div className="bg-white rounded-xl shadow-sm p-3 h-[530px] max-w-full">
       {/* Header */}
       <div className="flex items-center justify-between border-b pb-2">
-        <h2 className="text-[20px] font-lato font-semibold">
-          Pending Appointments
-        </h2>
-        <span 
-        onClick= {() => navigate("/secretarydashboard/appointmentdirectory")}
-        className="text-sm text-red-400 cursor-pointer">View All</span>
+        <h2 className="text-[20px] font-lato font-semibold">Pending Appointments</h2>
+        <span
+          onClick={() => navigate("/secretarydashboard/appointmentdirectory")}
+          className="text-sm text-red-400 cursor-pointer"
+        >
+          View All
+        </span>
       </div>
 
       {/* Content */}
@@ -85,9 +99,7 @@ export default function PendingAppointmentsPanel() {
         {loading ? (
           <p className="text-gray-500 text-center text-sm">Loading...</p>
         ) : appointments.length === 0 ? (
-          <p className="text-gray-500 text-center text-sm">
-            No pending appointments.
-          </p>
+          <p className="text-gray-500 text-center text-sm">No pending appointments.</p>
         ) : (
           appointments.map((appt) => (
             <Card
@@ -96,10 +108,11 @@ export default function PendingAppointmentsPanel() {
             >
               <CardHeader className="flex flex-col items-start">
                 <CardTitle className="text-[16px] font-semibold text-black">
-                  {appt.patient_users
-                    ? `${appt.patient_users.first_name} ${appt.patient_users.last_name}`
+                  {appt.patient
+                    ? `${appt.patient.first_name} ${appt.patient.last_name}`
                     : "Unknown"}
                 </CardTitle>
+
                 <CardDescription className="mt-1 text-sm">
                   {new Date(appt.appointment_datetime).toLocaleString("en-US", {
                     month: "long",
@@ -109,9 +122,13 @@ export default function PendingAppointmentsPanel() {
                     minute: "2-digit",
                   })}
                 </CardDescription>
+
                 <div className="text-xs text-gray-700 mt-1">
-                  {formatWeeks(appt.patient_users?.pregnancy_weeks ?? null)} •{" "}
-                  {appt.appointment_type}
+                  {formatPhase(
+                    appt.patient?.pregnancy_weeks ?? null,
+                    appt.patient?.postpartum_weeks ?? null
+                  )}{" "}
+                  • {appt.appointment_type}
                 </div>
               </CardHeader>
             </Card>
@@ -119,6 +136,6 @@ export default function PendingAppointmentsPanel() {
         )}
       </div>
     </div>
-
   );
 }
+  
