@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/Womby-Project/obgyn-admin/compare/v1.5.4...v1.6.0) (2025-10-19)
+
+
+### Features
+
+* Added articles for ob and other fixes and refinement on screen ([2d8fb0f](https://github.com/Womby-Project/obgyn-admin/commit/2d8fb0f76a6e831a7365c8d310326861adaf441b))
+
 ## [1.5.4](https://github.com/Womby-Project/obgyn-admin/compare/v1.5.3...v1.5.4) (2025-10-17)
 
 
