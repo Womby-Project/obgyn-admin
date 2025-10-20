@@ -62,7 +62,9 @@ type AppointmentRow = {
     first_name: string;
     last_name: string;
     pregnancy_weeks: number | null;
+    postpartum_weeks: number | null
     patient_type: string | null;
+    birth_date?: string | null;
   } | null;
   appointment_followups?: AppointmentFollowUpRow[];
 };
@@ -77,6 +79,7 @@ type AppointmentUIRow = {
   type: string;
   status: string;
   dateTime: Date; // real Date object for sorting
+  postpartumWeeks: string | number;
   patientType: string | "-";
 };
 
@@ -88,6 +91,47 @@ type AllowedNotificationType =
   | "forum_interaction"
   | "ai_alert"
   | "system";
+
+
+function weeksBetween(fromISO: string) {
+  const from = new Date(fromISO);
+  const ms = Date.now() - from.getTime();
+  if (Number.isNaN(ms)) return null;
+  return Math.max(0, Math.floor(ms / (7 * 24 * 60 * 60 * 1000)));
+}
+
+function computeWeeksValue(
+  p: {
+    pregnancy_weeks?: number | null;
+    postpartum_weeks?: number | null;
+    patient_type?: string | null;
+    birth_date?: string | null;
+  } | null
+): number | string {
+  if (!p) return "-";
+
+  const t = (p.patient_type || "").toLowerCase();
+
+  // If patient_type indicates postpartum, prioritize stored postpartum_weeks,
+  // otherwise derive from birth_date if available.
+  if (t.includes("postpartum")) {
+    let w =
+      typeof p.postpartum_weeks === "number" ? p.postpartum_weeks : null;
+
+    if ((w === null || w === undefined) && p.birth_date) {
+      const derived = weeksBetween(p.birth_date);
+      if (typeof derived === "number") w = derived;
+    }
+
+    return typeof w === "number" ? w : "-";
+  }
+
+  // Not postpartum -> use pregnancy_weeks if provided
+  if (typeof p.pregnancy_weeks === "number") return p.pregnancy_weeks;
+
+  return "-";
+}
+
 
 export default function AppointmentPage() {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
@@ -105,6 +149,10 @@ export default function AppointmentPage() {
 
   // keep resolved obgynId for later inserts (works for secretary or OB-GYN)
   const obgynIdRef = useRef<string | null>(null);
+
+
+
+
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -164,7 +212,9 @@ export default function AppointmentPage() {
               first_name,
               last_name,
               pregnancy_weeks,
-              patient_type
+              postpartum_weeks,
+              patient_type,
+              birth_date
             ),
             appointment_followups (
               id,
@@ -212,6 +262,9 @@ export default function AppointmentPage() {
 
   const mappedAppointments = useMemo<AppointmentUIRow[]>(() => {
     return appointments.map((a) => {
+
+
+      console.log(a.patient?.postpartum_weeks);
       // use latest follow-up (if any) to override display date/time & type
       let latestDate = new Date(a.appointment_datetime);
       let type = a.appointment_type ?? "-";
@@ -219,8 +272,7 @@ export default function AppointmentPage() {
       if (a.appointment_followups && a.appointment_followups.length > 0) {
         const sorted = [...a.appointment_followups].sort(
           (f1, f2) =>
-            new Date(f2.follow_up_datetime).getTime() -
-            new Date(f1.follow_up_datetime).getTime()
+            new Date(f2.follow_up_datetime).getTime() - new Date(f1.follow_up_datetime).getTime()
         );
         latestDate = new Date(sorted[0].follow_up_datetime);
         type = "Follow-up Checkup";
@@ -233,7 +285,14 @@ export default function AppointmentPage() {
           ? `${a.patient.first_name} ${a.patient.last_name}`
           : "Unknown Patient",
         patientType: a.patient?.patient_type ?? "-",
-        weeksPregnant: a.patient?.pregnancy_weeks ?? "-",
+        weeksPregnant: computeWeeksValue(a.patient), // unified computation
+        postpartumWeeks: (() => {
+          // Keep explicit postpartum field for clarity: if patient_type is postpartum,
+          // show computed value; otherwise show "-" (or keep value if you prefer).
+          const computed = computeWeeksValue(a.patient);
+          // if patient_type is postpartum it returns a number or "-" — pass through
+          return computed;
+        })(),
         date: latestDate.toLocaleDateString("en-US", {
           year: "numeric",
           month: "short",
@@ -270,18 +329,16 @@ export default function AppointmentPage() {
   }) => {
     try {
       // 1) In-app notification
-      const { error } = await supabase.from("notifications").insert([
-        {
-          recipient_id: recipientId,
-          recipient_role: "Patient", // valid: 'Patient' | 'OBGYN' | 'Secretary'
-          triggered_by: triggeredBy,
-          type, // must be one of the allowed values
-          title,
-          message,
-          related_appointment_id: relatedAppointmentId,
-          related_followup_id: relatedFollowupId ?? null,
-        },
-      ]);
+      const { error } = await supabase.from("notifications").insert([{
+        recipient_id: recipientId,
+        recipient_role: "Patient", // valid: 'Patient' | 'OBGYN' | 'Secretary'
+        triggered_by: triggeredBy,
+        type, // must be one of the allowed values
+        title,
+        message,
+        related_appointment_id: relatedAppointmentId,
+        related_followup_id: relatedFollowupId ?? null,
+      }]);
 
       if (error) {
         console.error("❌ Error inserting notification:", error.message);
@@ -476,7 +533,10 @@ export default function AppointmentPage() {
                                     {appt.patient}
                                   </button>
                                   <span className="text-[12px] text-gray-600">
-                                    {appt.patientType}, {appt.weeksPregnant} weeks
+                                    {appt.patientType},{" "}
+                                    {appt.weeksPregnant === "-"
+                                      ? "-"
+                                      : `${appt.weeksPregnant} weeks`}
                                   </span>
                                 </div>
                               </TableCell>
@@ -525,17 +585,15 @@ export default function AppointmentPage() {
                                                   },
                                                 });
                                               }}
-                                              className={`w-8 h-8 p-0 cursor-pointer ${
-                                                isAccepted
-                                                  ? "bg-[#65B43B] hover:shadow-md"
-                                                  : "bg-gray-300 cursor-not-allowed"
-                                              }`}
+                                              className={`w-8 h-8 p-0 cursor-pointer ${isAccepted
+                                                ? "bg-[#65B43B] hover:shadow-md"
+                                                : "bg-gray-300 cursor-not-allowed"
+                                                }`}
                                             >
                                               <Icon
                                                 icon="material-symbols:call"
-                                                className={`w-5 h-5 ${
-                                                  isAccepted ? "text-white" : "text-gray-700"
-                                                }`}
+                                                className={`w-5 h-5 ${isAccepted ? "text-white" : "text-gray-700"
+                                                  }`}
                                               />
                                             </Button>
                                           </HoverCardTrigger>
@@ -714,10 +772,10 @@ export default function AppointmentPage() {
                 prev.map((a) =>
                   a.id === selectedAppointment?.id
                     ? {
-                        ...a,
-                        appointment_datetime: newDate.toISOString(),
-                        status: "Rescheduled",
-                      }
+                      ...a,
+                      appointment_datetime: newDate.toISOString(),
+                      status: "Rescheduled",
+                    }
                     : a
                 )
               );

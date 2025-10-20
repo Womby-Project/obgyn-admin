@@ -189,7 +189,7 @@ export default function WriteArticlePage({ onBack }: WriteArticlePageProps) {
                   onChange={(e) => setThumbFile(e.target.files?.[0] ?? null)}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Uploads to <code>obgyn_thumbnail_articles</code> (public). The image URL is saved to <code>articles.thumbnail_url</code>.
+                 Choose thumbnail for your article
                 </p>
               </div>
 
