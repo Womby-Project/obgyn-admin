@@ -1,12 +1,6 @@
 import { useNavigate, useOutletContext } from "react-router-dom";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useEffect, useRef, useState } from "react";
 
 type StepContext = {
@@ -16,19 +10,47 @@ type StepContext = {
   setFormData: React.Dispatch<React.SetStateAction<any>>;
 };
 
+const hospitals = [
+  "Metro Davao Medical and Research Center",
+  "Davao Doctor’s Hospital",
+  "Davao Doctors Hospital Satellite",
+  "Brokenshire Integrated Health Ministries, Inc.",
+  "San Pedro Hospital of Davao City",
+  "Davao Medical School Foundation Hospital",
+  "Lanang Premiere Doctors Hospital",
+  "Malta Medical Center, Inc.",
+  "Alterado General Hospital",
+  "Ricardo Limso Medical Center",
+  "United Davao Specialists Hospital and Medical Center",
+  "Southern Philippines Medical Center",
+  "Camp Panacan Station Hospital",
+  "Davao Adventist Hospital",
+  "Davao Mediquest Hospital",
+  "Isaac T. Robillo Memorial Hospital",
+  "Tibungco Doctors Hospital",
+  "Holy Spirit Community Hospital of Davao, Inc.",
+  "Medical Mission Group Hospital and Health Services Cooperative of Davao City",
+  "Ernesto Guadalope Community Hospital",
+  "Specialists’ Primary Care of Ilang, Inc.",
+  "Anda Riverview Medical Center",
+  "Saint Felix Medical Hospital",
+  "Fabie General Hospital",
+];
+
 export default function ProfessionalInformation() {
   const navigate = useNavigate();
-  const { step, totalSteps, formData, setFormData } = useOutletContext<StepContext>();
+  const { step, totalSteps, formData, setFormData } =
+    useOutletContext<StepContext>();
 
   const [, setFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
 
-      // 50MB = 50 * 1024 * 1024 bytes
       if (file.size > 50 * 1024 * 1024) {
         alert("File is too large! Please upload a file under 50MB.");
         return;
@@ -52,34 +74,41 @@ export default function ProfessionalInformation() {
     };
   }, [previewUrl]);
 
-  const handleContinue = () => {
-    console.log("📋 Step 3 formData:", formData);
+  const handleHospitalSelect = (hospital: string) => {
+    setFormData((prev: any) => {
+      const selected = prev.affiliated_hospital || [];
+      const updated = selected.includes(hospital)
+        ? selected.filter((h: string) => h !== hospital)
+        : [...selected, hospital];
+      return { ...prev, affiliated_hospital: updated };
+    });
+  };
 
-    // Basic validation
-    if (!formData.prc_license_number || formData.prc_license_number.trim() === "") {
+  const handleContinue = () => {
+    if (
+      !formData.prc_license_number ||
+      formData.prc_license_number.trim() === ""
+    ) {
       alert("PRC License Number is required.");
       return;
     }
-    if (!formData.affiliated_hospital) {
-      alert("Please select an affiliated hospital.");
+    if (
+      !formData.affiliated_hospital ||
+      formData.affiliated_hospital.length === 0
+    ) {
+      alert("Please select at least one affiliated hospital.");
       return;
     }
-    // If you want to require Organization too, uncomment:
-    // if (!formData.organization || formData.organization.trim() === "") {
-    //   alert("Please enter your organization.");
-    //   return;
-    // }
     if (!formData.prc_id_file) {
       alert("Please upload your PRC ID.");
       return;
     }
 
-    console.log("✅ Step 3 validated, moving to Step 4");
     navigate("/setschedule");
   };
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col relative">
       <p className="text-[12px] text-[#616161] uppercase">
         Step {step} out of {totalSteps}
       </p>
@@ -87,7 +116,8 @@ export default function ProfessionalInformation() {
         Background
       </h1>
       <p className="text-[17px] text-[#616161]">
-        Tell us about your medical background to help mothers trust and connect with you.
+        Tell us about your medical background to help mothers trust and connect
+        with you.
       </p>
 
       {/* PRC License Number Input */}
@@ -106,29 +136,50 @@ export default function ProfessionalInformation() {
         />
       </div>
 
-      {/* Dropdown for Affiliated Hospital/s */}
-      <div className="flex flex-col mt-5">
-        <Select
-          value={formData.affiliated_hospital || ""}
-          onValueChange={(value) =>
-            setFormData((prev: any) => ({
-              ...prev,
-              affiliated_hospital: value,
-            }))
-          }
+      {/* Dropdown for Affiliated Hospitals (Multi-select) */}
+      <div className="flex flex-col mt-5 relative">
+        <button
+          type="button"
+          onClick={() => setShowDropdown((prev) => !prev)}
+          className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-sm w-[362px] h-[45px] px-4 flex justify-between items-center text-[#616161]"
         >
-          <SelectTrigger className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-sm w-[362px] !h-[45px] px-4 text-[#616161]">
-            <SelectValue placeholder="Affiliated Hospital/s" />
-          </SelectTrigger>
-          <SelectContent className="w-[362px] max-h-[180px]">
-            <SelectItem value="option1">Option 1</SelectItem>
-            <SelectItem value="option2">Option 2</SelectItem>
-            <SelectItem value="option3">Option 3</SelectItem>
-          </SelectContent>
-        </Select>
+          <span className="truncate text-left">
+            {formData.affiliated_hospital?.length
+              ? formData.affiliated_hospital.join(", ")
+              : "Select Affiliated Hospitals"}
+          </span>
+          <ExpandMoreIcon
+            style={{
+              fontSize: 22,
+              transform: showDropdown ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s ease",
+            }}
+          />
+        </button>
+
+        {showDropdown && (
+          <div className="absolute top-[50px] z-10 bg-white border border-[#E5E7EB] rounded-sm shadow-md w-[362px] max-h-[180px] overflow-y-auto">
+            {hospitals.map((hospital) => (
+              <label
+                key={hospital}
+                className="flex items-center gap-2 px-4 py-2 hover:bg-[#F9F9F9] cursor-pointer text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={
+                    formData.affiliated_hospital?.includes(hospital) || false
+                  }
+                  onChange={() => handleHospitalSelect(hospital)}
+                  className="accent-[#E46B64] cursor-pointer"
+                />
+                <span>{hospital}</span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Organization (NEW — placed right after Affiliated Hospital/s) */}
+      {/* Organization Input */}
       <div className="flex flex-col mt-5">
         <input
           type="text"
@@ -149,7 +200,8 @@ export default function ProfessionalInformation() {
 
       {/* Upload PRC ID */}
       <p className="text-[14px] text-[#616161] mb-2 mt-5 w-[362px] italic">
-        Upload a clear photo or scanned copy of your valid PRC ID for verification purposes.
+        Upload a clear photo or scanned copy of your valid PRC ID for
+        verification purposes.
       </p>
 
       <label
@@ -183,7 +235,6 @@ export default function ProfessionalInformation() {
             </button>
           </>
         )}
-
         <input
           id="prc-upload"
           ref={fileInputRef}
