@@ -1,3 +1,10 @@
+## [1.7.2](https://github.com/Womby-Project/obgyn-admin/compare/v1.7.1...v1.7.2) (2025-10-21)
+
+
+### Bug Fixes
+
+* Fix vercel logo error ([a4cef17](https://github.com/Womby-Project/obgyn-admin/commit/a4cef175998bc45b84db3f96d011cafe88c193cf))
+
 ## [1.7.1](https://github.com/Womby-Project/obgyn-admin/compare/v1.7.0...v1.7.1) (2025-10-21)
 
 
