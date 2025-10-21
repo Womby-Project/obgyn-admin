@@ -1,3 +1,11 @@
+## [1.7.1](https://github.com/Womby-Project/obgyn-admin/compare/v1.7.0...v1.7.1) (2025-10-21)
+
+
+### Bug Fixes
+
+* polish screens ([c65ed6c](https://github.com/Womby-Project/obgyn-admin/commit/c65ed6c1b29bec63f02ff927a40561baccd83036))
+* polish some pages ([fb7588d](https://github.com/Womby-Project/obgyn-admin/commit/fb7588d6ea9e2f032996edf326ff869f8d014418))
+
 # [1.7.0](https://github.com/Womby-Project/obgyn-admin/compare/v1.6.0...v1.7.0) (2025-10-20)
 
 
