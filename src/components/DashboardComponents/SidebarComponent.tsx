@@ -36,7 +36,7 @@ export default function Sidebar({ user }: SidebarProps) {
       {/* Logo */}
       <div className="flex items-center h-[64px] px-6 border-b border-gray-200 ml-3">
         <img
-          src="/src/assets/wombly-logo.png"
+          src="/wombly-logo.png"
           alt="womblylogo"
           className="w-[40px] h-[40px] bg-[#FCF5EE] rounded-lg"
         />
