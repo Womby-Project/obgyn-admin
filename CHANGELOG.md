@@ -1,3 +1,10 @@
+## [1.7.5](https://github.com/Womby-Project/obgyn-admin/compare/v1.7.4...v1.7.5) (2025-10-22)
+
+
+### Bug Fixes
+
+* Polish and defect screen ([11860a8](https://github.com/Womby-Project/obgyn-admin/commit/11860a8681def79ddbb692665dd97230c139b018))
+
 ## [1.7.4](https://github.com/Womby-Project/obgyn-admin/compare/v1.7.3...v1.7.4) (2025-10-22)
 
 
