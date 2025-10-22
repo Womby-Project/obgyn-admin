@@ -8,7 +8,7 @@ import EmojiEmotionsIcon from "@mui/icons-material/EmojiEmotions";
 import { supabase } from "@/lib/supabaseClient";
 
 type ChatMessage = {
-  status: string; // "active" | "unsent" | etc.
+  status: string;
   id: string;
   sender_id: string;
   message: string;
@@ -34,7 +34,6 @@ type Props = {
   onStartCall?: () => void;
 };
 
-// e.g., "October 18, 2025 11:24 AM"
 const fmtDateTime = (d: Date) =>
   `${d.toLocaleString("en-US", { month: "long" })} ${d.getDate()}, ${d.getFullYear()} ${d.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 
@@ -50,7 +49,7 @@ export default function RightChatPanel({
   const [newMessage, setNewMessage] = useState("");
   const [typingStatus, setTypingStatus] = useState<TypingStatus | null>(null);
 
-  // Track the most recent optimistic message to merge on realtime INSERT
+  const sendingRef = useRef(false); // ✅ Prevent duplicate send while insert pending
   const lastOptimisticRef = useRef<{
     id: string;
     sender_id: string;
@@ -58,7 +57,6 @@ export default function RightChatPanel({
     created_at: string;
   } | null>(null);
 
-  // ✅ Fetch messages (initial)
   useEffect(() => {
     if (!roomId) return;
     let mounted = true;
@@ -87,7 +85,6 @@ export default function RightChatPanel({
     };
   }, [roomId]);
 
-  // ✅ Subscribe realtime + de-duplicate safe merge
   useEffect(() => {
     if (!roomId) return;
 
@@ -106,10 +103,8 @@ export default function RightChatPanel({
             const incoming = payload.new as ChatMessage;
 
             setMessages((prev) => {
-              // 1) If already present by id, ignore
               if (prev.some((m) => m.id === incoming.id)) return prev;
 
-              // 2) Try to merge with the most recent optimistic temp message
               const tempIdx = prev.findIndex(
                 (m) =>
                   m.id.startsWith("temp-") &&
@@ -117,29 +112,27 @@ export default function RightChatPanel({
                   m.message === incoming.message &&
                   Math.abs(
                     new Date(m.created_at).getTime() -
-                      new Date(incoming.created_at).getTime()
-                  ) < 10000 // within 10 seconds
+                    new Date(incoming.created_at).getTime()
+                  ) < 10000
               );
 
               if (tempIdx >= 0) {
                 const cloned = [...prev];
-                cloned[tempIdx] = incoming; // replace temp with real
+                cloned[tempIdx] = incoming;
                 return cloned;
               }
 
-              // 3) Fallback guard: avoid near-duplicate text from same sender within 5s
               const isNearDup = prev.some(
                 (m) =>
                   m.sender_id === incoming.sender_id &&
                   m.message === incoming.message &&
                   Math.abs(
                     new Date(m.created_at).getTime() -
-                      new Date(incoming.created_at).getTime()
+                    new Date(incoming.created_at).getTime()
                   ) < 5000
               );
               if (isNearDup) return prev;
 
-              // 4) Otherwise append
               return [...prev, incoming];
             });
           } else if (payload.eventType === "UPDATE") {
@@ -157,7 +150,6 @@ export default function RightChatPanel({
     };
   }, [roomId]);
 
-  // ✅ Mark seen when viewing
   useEffect(() => {
     if (!roomId || !currentUserId) return;
 
@@ -172,7 +164,7 @@ export default function RightChatPanel({
         .neq("sender_id", currentUserId)
         .select();
 
-    if (error) {
+      if (error) {
         console.error("❌ Error marking seen:", error.message);
         return;
       }
@@ -189,7 +181,6 @@ export default function RightChatPanel({
     markSeen();
   }, [roomId, currentUserId]);
 
-  // ✅ Typing indicator
   useEffect(() => {
     if (!roomId) return;
 
@@ -227,10 +218,12 @@ export default function RightChatPanel({
     );
   };
 
-  // ✅ Send text with optimistic update + safe merge (fixes duplication bug)
+  // ✅ Fixed duplication issue
   const handleSend = async () => {
+    if (sendingRef.current) return; // prevent rapid double send
     if (!newMessage.trim() || !roomId || !currentUserId) return;
 
+    sendingRef.current = true;
     const text = newMessage.trim();
     const nowISO = new Date().toISOString();
 
@@ -266,14 +259,14 @@ export default function RightChatPanel({
       },
     ]);
 
+    sendingRef.current = false; // release lock
+
     if (error) {
-      // Rollback optimistic if rejected
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       alert(error.message);
     }
   };
 
-  // ✅ Unsend (only own messages)
   const handleUnsend = async (msgId: string) => {
     const { error, data } = await supabase
       .from("chat_messages")
@@ -292,12 +285,11 @@ export default function RightChatPanel({
     }
   };
 
-  // ✅ Upload (image or file)
   const handleUpload = async (file: File, type: "image" | "file") => {
     if (!file || !roomId || !currentUserId) return;
 
     const fileExt = file.name.split(".").pop();
-       const filePath = `${roomId}/${Date.now()}.${fileExt}`;
+    const filePath = `${roomId}/${Date.now()}.${fileExt}`;
 
     const { error: uploadError } = await supabase.storage
       .from("chat_attachments")
@@ -329,7 +321,6 @@ export default function RightChatPanel({
     }
   };
 
-  // ---------- Single combined separator (date + time) ----------
   const itemsWithSeparators = useMemo(() => {
     const out: Array<
       | { kind: "sep"; key: string; label: string }
@@ -348,13 +339,13 @@ export default function RightChatPanel({
       const needsGapSep =
         lastSepMs === null
           ? true
-          : Math.abs(ms - lastSepMs) > 30 * 60 * 1000; // > 30 minutes
+          : Math.abs(ms - lastSepMs) > 30 * 60 * 1000;
 
       if (needsDayChangeSep || needsGapSep) {
         out.push({
           kind: "sep",
           key: `sep-${ms}-${i}`,
-          label: fmtDateTime(t), // "October 18, 2025 11:24 AM"
+          label: fmtDateTime(t),
         });
         lastSepMs = ms;
         lastSepDay = dayKey;
@@ -373,7 +364,6 @@ export default function RightChatPanel({
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
         <div className="flex items-center gap-3">
           <img
@@ -397,7 +387,6 @@ export default function RightChatPanel({
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {loading ? (
           <div className="text-gray-400 text-sm">Loading messages...</div>
@@ -407,7 +396,7 @@ export default function RightChatPanel({
               return (
                 <div key={item.key} className="flex items-center justify-center">
                   <span className="text-[11px] text-gray-500 bg-white px-3 rounded-full shadow-sm">
-                    {item.label /* e.g., October 18, 2025 11:24 AM */}
+                    {item.label}
                   </span>
                 </div>
               );
@@ -468,46 +457,60 @@ export default function RightChatPanel({
                     )}
                   </div>
 
-                  {/* No per-message timestamp here — separator already shows date+time */}
-                  {/* Actions */}
+                  {/* ✅ Easier to click Unsend menu */}
                   {msg.status === "active" && (
                     <div
-                      className={`absolute top-1/2 -translate-y-1/2 ${
-                        isFromMe ? "right-full mr-1" : "left-full ml-1"
-                      } hidden group-hover:flex items-center`}
+                      className={`absolute top-1/2 -translate-y-1/2 ${isFromMe ? "right-full mr-1" : "left-full ml-1"
+                        } hidden group-hover:flex items-center`}
                     >
-                      <div className="relative group/menu">
-                        <MoreHorizOutlinedIcon className="cursor-pointer text-gray-500 hover:text-[#E46B64]" />
+                      <div
+                        className="relative"
+                        onMouseEnter={(e) => {
+                          const menu = e.currentTarget.querySelector(".menu-content") as HTMLElement;
+                          clearTimeout((menu as any)?._hideTimeout);
+                          menu.style.opacity = "1";
+                          menu.style.transform = "scale(1)";
+                          menu.style.pointerEvents = "auto";
+                        }}
+                        onMouseLeave={(e) => {
+                          const menu = e.currentTarget.querySelector(".menu-content") as HTMLElement;
+                          (menu as any)._hideTimeout = setTimeout(() => {
+                            menu.style.opacity = "0";
+                            menu.style.transform = "scale(0.95)";
+                            menu.style.pointerEvents = "none";
+                          }, 200); // ⏳ small delay before hiding (prevents flicker)
+                        }}
+                      >
+                        <MoreHorizOutlinedIcon className="cursor-pointer text-gray-500 hover:text-[#E46B64] p-1 rounded-md hover:bg-gray-100 transition" />
+
+                        {/* ✅ Menu stays open while hovering menu or icon */}
                         <div
-                          className={`absolute mt-2 w-36 rounded-2xl shadow-md border border-gray-100
-                                  bg-white/95 backdrop-blur-sm z-50
-                                  ${isFromMe ? "right-0 origin-top-right" : "left-0 origin-top-left"}
-                                  after:content-[''] after:absolute after:w-0 after:h-0 
-                                  after:border-8 after:border-transparent after:top-0
-                                  ${
-                                    isFromMe
-                                      ? "after:right-4 after:border-b-white after:-translate-y-full"
-                                      : "after:left-4 after:border-b-white after:-translate-y-full"
-                                  }
-                                  opacity-0 scale-95 pointer-events-none
-                                  group-hover/menu:opacity-100 group-hover/menu:scale-100 group-hover/menu:pointer-events-auto
-                                  transition-all duration-200 ease-out`}
+                          className={`menu-content absolute mt-2 w-36 rounded-2xl shadow-md border border-gray-100
+            bg-white/95 backdrop-blur-sm z-50
+            ${isFromMe ? "right-0 origin-top-right" : "left-0 origin-top-left"}
+            after:content-[''] after:absolute after:w-0 after:h-0 
+            after:border-8 after:border-transparent after:top-0
+            ${isFromMe
+                              ? "after:right-4 after:border-b-white after:-translate-y-full"
+                              : "after:left-4 after:border-b-white after:-translate-y-full"
+                            }
+            opacity-0 scale-95 pointer-events-none transition-all duration-200 ease-out`}
                         >
                           {isFromMe && (
                             <button
                               onClick={() => handleUnsend(msg.id)}
                               className="w-full text-left px-4 py-2 text-sm text-gray-700 
-                                      hover:bg-[#E46B64]/10 hover:text-[#E46B64] 
-                                      transition-colors rounded-t-2xl"
+                hover:bg-[#E46B64]/10 hover:text-[#E46B64] 
+                transition-colors rounded-t-2xl"
                             >
                               Unsend
                             </button>
                           )}
                           <button
-                            onClick={() => console.log("report", msg.id)}
+                            onClick={() => console.log('report', msg.id)}
                             className={`w-full text-left px-4 py-2 text-sm text-gray-700 
-                                    hover:bg-[#E46B64]/10 hover:text-[#E46B64] 
-                                    transition-colors ${isFromMe ? "rounded-b-2xl" : "rounded-2xl"}`}
+              hover:bg-[#E46B64]/10 hover:text-[#E46B64] 
+              transition-colors ${isFromMe ? 'rounded-b-2xl' : 'rounded-2xl'}`}
                           >
                             Report
                           </button>
@@ -515,6 +518,7 @@ export default function RightChatPanel({
                       </div>
                     </div>
                   )}
+
                 </div>
               </div>
             );
@@ -522,7 +526,6 @@ export default function RightChatPanel({
         )}
       </div>
 
-      {/* Input */}
       <div className="border-t border-gray-200 px-4 py-3 flex items-center gap-3">
         <label className="cursor-pointer">
           <AttachFileOutlinedIcon className="text-gray-500" />
