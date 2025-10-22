@@ -1,3 +1,10 @@
+## [1.7.3](https://github.com/Womby-Project/obgyn-admin/compare/v1.7.2...v1.7.3) (2025-10-22)
+
+
+### Bug Fixes
+
+* small fixes ([df87dec](https://github.com/Womby-Project/obgyn-admin/commit/df87deca90fc614368c81cc62f6ec379f84577b7))
+
 ## [1.7.2](https://github.com/Womby-Project/obgyn-admin/compare/v1.7.1...v1.7.2) (2025-10-21)
 
 
