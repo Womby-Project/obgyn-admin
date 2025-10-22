@@ -1,3 +1,10 @@
+## [1.7.4](https://github.com/Womby-Project/obgyn-admin/compare/v1.7.3...v1.7.4) (2025-10-22)
+
+
+### Bug Fixes
+
+* login page ([4edb2e0](https://github.com/Womby-Project/obgyn-admin/commit/4edb2e057b16fbd1eaab67ad6b58a19995e3cd7c))
+
 ## [1.7.3](https://github.com/Womby-Project/obgyn-admin/compare/v1.7.2...v1.7.3) (2025-10-22)
 
 
