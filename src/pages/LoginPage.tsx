@@ -82,7 +82,7 @@ export default function LoginPage() {
     <div className="flex flex-col h-screen">
       <div className="flex items-center w-screen px-4 h-17 shadow-sm border border-[#E5E7EB] bg-[#FFFFFF] gap-2">
         <img
-          src="/src/assets/wombly-logo.png"
+          src="/wombly-logo.png"
           alt="womblylogo"
           className="w-[40px] h-[40px] bg-[#FCF5EE] rounded-lg"
         />

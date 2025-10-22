@@ -9,11 +9,10 @@ import AgoraRTC, {
 } from "agora-rtc-sdk-ng";
 
 import { getAgoraToken } from "@/utils/agora";
-import { X, Mic, MicOff, Video, VideoOff, PhoneOff } from "lucide-react";
+import { X, Mic, MicOff, Video, VideoOff, PhoneOff, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 type Props = {
-  // NEW: callId so we can update & subscribe to this specific call row
   callId: string;
   roomId: string;
   callerName: string;
@@ -25,18 +24,15 @@ type Props = {
 };
 
 export default function VideoCall({
-  callId, // NEW
+  callId,
   roomId,
   onClose,
   profileUrl,
   remoteProfileUrl,
   callerName,
   calleeName,
-  disableLocalCamOnStart = false,
 }: Props) {
   const clientRef = useRef<IAgoraRTCClient | null>(null);
-
-  // refs for DOM video containers
   const localPipRef = useRef<HTMLDivElement | null>(null);
   const remoteMainRef = useRef<HTMLDivElement | null>(null);
   const remoteSplitRef = useRef<HTMLDivElement | null>(null);
@@ -51,15 +47,9 @@ export default function VideoCall({
 
   const [callStarted, setCallStarted] = useState(false);
   const [duration, setDuration] = useState(0);
-
   const [splitView, setSplitView] = useState(false);
-
-  // NEW: reflect when a remote-ended signal is received
   const [callEnded, setCallEnded] = useState(false);
-
-  // store own uid
   const uidRef = useRef<number | null>(null);
-  // store active remote
   const remoteUserRef = useRef<IAgoraRTCRemoteUser | null>(null);
 
   const enforceVideoStyle = (container: HTMLDivElement | null) => {
@@ -78,8 +68,8 @@ export default function VideoCall({
   ) => {
     if (track && container) {
       try {
-        container.innerHTML = ""; // clear old track
-        track.stop(); // ✅ make sure it detaches from any old container
+        container.innerHTML = "";
+        track.stop();
         track.play(container, { fit: "cover" });
         enforceVideoStyle(container);
       } catch (err) {
@@ -88,16 +78,13 @@ export default function VideoCall({
     }
   };
 
-  // re-attach when layout or states change
   useEffect(() => {
-    if (camTrack) {
-      // Always show yourself in PiP, never in main
+    if (camTrack && remoteJoined) {
       playTrack(camTrack, localPipRef.current);
     }
 
     const remote = remoteUserRef.current;
     if (remote && remote.videoTrack) {
-      // Only remote should occupy main/split
       if (splitView) playTrack(remote.videoTrack, remoteSplitRef.current);
       else playTrack(remote.videoTrack, remoteMainRef.current);
     }
@@ -121,19 +108,15 @@ export default function VideoCall({
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (callStarted) {
-      interval = setInterval(() => {
-        setDuration((d) => d + 1);
-      }, 1000);
+      interval = setInterval(() => setDuration((d) => d + 1), 1000);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [callStarted]);
 
-  // NEW: subscribe to this callId; if ended_at is set by the other party, auto-end here too
   useEffect(() => {
     if (!callId) return;
-
     const channel = supabase
       .channel(`chat_calls:end:${callId}`)
       .on(
@@ -145,14 +128,10 @@ export default function VideoCall({
           filter: `id=eq.${callId}`,
         },
         (payload) => {
-         
           const newRow = payload.new as { ended_at?: string | null };
           if (newRow?.ended_at) {
             setCallEnded(true);
-            // Briefly show "Call ended", then leave & cleanup
-            setTimeout(() => {
-              leaveCall();
-            }, 1200);
+            setTimeout(() => leaveCall(), 1200);
           }
         }
       )
@@ -161,7 +140,7 @@ export default function VideoCall({
     return () => {
       try {
         supabase.removeChannel(channel);
-      } catch {}
+      } catch { }
     };
   }, [callId]);
 
@@ -173,7 +152,6 @@ export default function VideoCall({
     uidRef.current = uid;
 
     const { token, appId } = await getAgoraToken(roomId, uid);
-
     const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
     clientRef.current = client;
 
@@ -183,21 +161,11 @@ export default function VideoCall({
     let localCam: ICameraVideoTrack | null = null;
 
     try {
-      // 👇 only fetch local cam if not disabled
-      if (!disableLocalCamOnStart) {
-        [localMic, localCam] = await AgoraRTC.createMicrophoneAndCameraTracks();
-
-        // ✅ Always play local cam in PiP (never in main area)
-        if (localCam && localPipRef.current) {
-          localCam.play(localPipRef.current, { fit: "cover" });
-          enforceVideoStyle(localPipRef.current);
-        }
-      }
+      [localMic, localCam] = await AgoraRTC.createMicrophoneAndCameraTracks();
     } catch (err) {
       console.warn("No camera or microphone detected.", err);
     }
 
-    // publish only if tracks exist
     const toPublish = [localMic, localCam].filter(Boolean) as any[];
     if (toPublish.length > 0) await client.publish(toPublish);
 
@@ -205,24 +173,18 @@ export default function VideoCall({
     setCamTrack(localCam);
     setJoined(true);
 
-    // remote users
     client.on("user-published", async (user, mediaType) => {
-      if (user.uid === uidRef.current) return; // skip self
-
+      if (user.uid === uidRef.current) return;
       await client.subscribe(user, mediaType);
       remoteUserRef.current = user;
       setRemoteJoined(true);
 
       if (mediaType === "video" && user.videoTrack) {
-        // ✅ Remote goes into main or split view
         setTimeout(() => {
-          if (splitView) {
+          if (splitView)
             playTrack(user.videoTrack!, remoteSplitRef.current);
-          } else {
-            playTrack(user.videoTrack!, remoteMainRef.current);
-          }
+          else playTrack(user.videoTrack!, remoteMainRef.current);
         }, 100);
-
         setRemoteCamEnabled(true);
       }
 
@@ -233,7 +195,6 @@ export default function VideoCall({
 
     client.on("user-unpublished", (user, mediaType) => {
       if (user.uid === uidRef.current) return;
-
       if (mediaType === "video") {
         setRemoteCamEnabled(false);
         if (remoteUserRef.current?.uid === user.uid) {
@@ -244,7 +205,6 @@ export default function VideoCall({
 
     client.on("user-left", (user) => {
       if (user.uid === uidRef.current) return;
-
       if (remoteUserRef.current?.uid === user.uid) {
         remoteUserRef.current = null;
         setRemoteJoined(false);
@@ -256,10 +216,9 @@ export default function VideoCall({
 
   const leaveCall = async () => {
     if (!clientRef.current) return;
-
     try {
       await clientRef.current.leave();
-    } catch {}
+    } catch { }
     clientRef.current.removeAllListeners?.();
     micTrack?.close();
     camTrack?.close();
@@ -269,7 +228,6 @@ export default function VideoCall({
     setCallStarted(false);
 
     try {
-      // NEW: update by callId (and only once if still null)
       await supabase
         .from("chat_calls")
         .update({ ended_at: new Date() })
@@ -282,153 +240,174 @@ export default function VideoCall({
     onClose?.();
     try {
       window.close();
-    } catch {}
+    } catch { }
   };
 
-  // Toggle mic
   const toggleMic = async () => {
     if (!micTrack) return;
-
     const enabled = micTrack.enabled;
-    if (enabled) {
-      await micTrack.setEnabled(false); // mute mic
-      setMicEnabled(false);
-    } else {
-      await micTrack.setEnabled(true); // unmute mic
-      setMicEnabled(true);
-    }
+    await micTrack.setEnabled(!enabled);
+    setMicEnabled(!enabled);
   };
 
-  // Toggle cam
   const toggleCam = async () => {
     if (!camTrack) return;
-
     const enabled = camTrack.enabled;
     await camTrack.setEnabled(!enabled);
     setCamEnabled(!enabled);
-
-    if (enabled) {
-      // turning cam OFF → let JSX show placeholder
-      camTrack.stop(); // optional, but keeps container clean
-    } else {
-      // turning cam ON → replay into PiP
-      if (localPipRef.current) {
-        camTrack.play(localPipRef.current, { fit: "cover" });
-        enforceVideoStyle(localPipRef.current);
-      }
-    }
   };
 
-  const formatDuration = (seconds: number) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
-    const s = (seconds % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
+  const formatDuration = (s: number) => {
+    const m = Math.floor(s / 60).toString().padStart(2, "0");
+    const sec = (s % 60).toString().padStart(2, "0");
+    return `${m}:${sec}`;
   };
 
   const onLocalPipClick = () => setSplitView((s) => !s);
 
+  // --- UI rendering ---
+  const showRinging = joined && !remoteJoined && !callStarted && !callEnded;
+
   return (
     <div className="w-screen h-screen bg-black relative overflow-hidden">
-      {splitView ? (
-        <div className="flex w-full h-full">
-          <div ref={remoteSplitRef} className="flex-1 bg-black relative">
-            {!remoteCamEnabled && remoteProfileUrl && (
-              <ProfilePlaceholder url={remoteProfileUrl} large />
+      {/* Ringing screen */}
+      {showRinging ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+          <audio
+            src="/sounds/dial-tone.mp3" // you can replace this with any ringtone URL or local file
+            autoPlay
+            loop
+            muted={false}
+          />
+          <div className="w-24 h-24 rounded-full overflow-hidden mb-6">
+            {remoteProfileUrl ? (
+              <img
+                src={remoteProfileUrl}
+                alt="Profile"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gray-700 flex items-center justify-center text-3xl">
+                📞
+              </div>
             )}
           </div>
-
-          {/* Local video ALWAYS stays PiP */}
-          <div
-            ref={localPipRef}
-            onClick={onLocalPipClick}
-            className="absolute bottom-4 right-4 w-40 h-28 rounded-lg overflow-hidden shadow-lg bg-gray-800 border border-gray-700 cursor-pointer"
+          <h2 className="text-xl font-semibold mb-2">{calleeName}</h2>
+          <p className="text-gray-300 flex items-center gap-2">
+            <Loader2 className="animate-spin" size={18} /> Ringing…
+          </p>
+          <button
+            onClick={leaveCall}
+            className="mt-8 flex items-center justify-center w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 transition"
           >
-            {!camEnabled && profileUrl && (
-              <ProfilePlaceholder url={profileUrl} small />
-            )}
-          </div>
+            <PhoneOff size={28} className="text-white" />
+          </button>
         </div>
       ) : (
         <>
-          <div ref={remoteMainRef} className="absolute inset-0 bg-black">
-            {!remoteCamEnabled && remoteProfileUrl && (
-              <ProfilePlaceholder url={remoteProfileUrl} large />
-            )}
+          {/* Normal call UI */}
+          {splitView ? (
+            <div className="flex w-full h-full">
+              <div ref={remoteSplitRef} className="flex-1 bg-black relative">
+                {!remoteCamEnabled && remoteProfileUrl && (
+                  <ProfilePlaceholder url={remoteProfileUrl} large />
+                )}
+              </div>
+
+              <div
+                ref={localPipRef}
+                onClick={onLocalPipClick}
+                className="absolute bottom-4 right-4 w-40 h-28 rounded-lg overflow-hidden shadow-lg bg-gray-800 border border-gray-700 cursor-pointer"
+              >
+                {!camEnabled && profileUrl && (
+                  <ProfilePlaceholder url={profileUrl} small />
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div ref={remoteMainRef} className="absolute inset-0 bg-black">
+                {!remoteCamEnabled && remoteProfileUrl && (
+                  <ProfilePlaceholder url={remoteProfileUrl} large />
+                )}
+              </div>
+              <div
+                ref={localPipRef}
+                onClick={onLocalPipClick}
+                className="absolute bottom-4 right-4 w-40 h-28 rounded-lg overflow-hidden shadow-lg bg-gray-800 border border-gray-700 cursor-pointer"
+              >
+                {!camEnabled && profileUrl && (
+                  <ProfilePlaceholder url={profileUrl} small />
+                )}
+              </div>
+            </>
+          )}
+
+          <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-3 bg-black/40 backdrop-blur-sm">
+            <h2 className="font-semibold text-lg text-white">
+              {callEnded
+                ? "Call ended"
+                : callStarted
+                  ? `In Call - ${callerName}, ${calleeName}`
+                  : joined
+                    ? "Waiting for other user..."
+                    : "Connecting..."}
+            </h2>
+            <button
+              onClick={leaveCall}
+              className="p-2 rounded-full hover:bg-gray-700 transition"
+            >
+              <X size={22} className="text-gray-300" />
+            </button>
           </div>
-          <div
-            ref={localPipRef}
-            onClick={onLocalPipClick}
-            className="absolute bottom-4 right-4 w-40 h-28 rounded-lg overflow-hidden shadow-lg bg-gray-800 border border-gray-700 cursor-pointer"
-          >
-            {!camEnabled && profileUrl && (
-              <ProfilePlaceholder url={profileUrl} small />
-            )}
-          </div>
+
+          {callStarted && !callEnded && (
+            <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 text-white text-lg font-semibold">
+              {formatDuration(duration)}
+            </div>
+          )}
+
+          {callStarted && !callEnded && (
+            <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-6">
+              <button
+                onClick={toggleMic}
+                className={`flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition ${micEnabled
+                    ? "bg-blue-500 hover:bg-blue-600"
+                    : "bg-gray-700 hover:bg-gray-600"
+                  }`}
+              >
+                {micEnabled ? (
+                  <Mic size={22} className="text-white" />
+                ) : (
+                  <MicOff size={22} className="text-white" />
+                )}
+              </button>
+
+              <button
+                onClick={toggleCam}
+                className={`flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition ${camEnabled
+                    ? "bg-blue-500 hover:bg-blue-600"
+                    : "bg-gray-700 hover:bg-gray-600"
+                  }`}
+              >
+                {camEnabled ? (
+                  <Video size={22} className="text-white" />
+                ) : (
+                  <VideoOff size={22} className="text-white" />
+                )}
+              </button>
+
+              <button
+                onClick={leaveCall}
+                className="flex items-center justify-center w-14 h-14 rounded-full shadow-lg bg-red-500 hover:bg-red-600 transition"
+              >
+                <PhoneOff size={24} className="text-white" />
+              </button>
+            </div>
+          )}
         </>
       )}
 
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-3 bg-black/40 backdrop-blur-sm">
-        <h2 className="font-semibold text-lg text-white">
-          {callEnded
-            ? "Call ended"
-            : callStarted
-            ? `In Call - ${callerName}, ${calleeName}`
-            : joined
-            ? "Waiting for other user..."
-            : "Connecting..."}
-        </h2>
-        <button
-          onClick={leaveCall}
-          className="p-2 rounded-full hover:bg-gray-700 transition"
-        >
-          <X size={22} className="text-gray-300" />
-        </button>
-      </div>
-
-      {callStarted && !callEnded && (
-        <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 text-white text-lg font-semibold">
-          {formatDuration(duration)}
-        </div>
-      )}
-
-      {callStarted && !callEnded && (
-        <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-6">
-          <button
-            onClick={toggleMic}
-            className={`flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition ${
-              micEnabled ? "bg-blue-500 hover:bg-blue-600" : "bg-gray-700 hover:bg-gray-600"
-            }`}
-          >
-            {micEnabled ? (
-              <Mic size={22} className="text-white" />
-            ) : (
-              <MicOff size={22} className="text-white" />
-            )}
-          </button>
-
-          <button
-            onClick={toggleCam}
-            className={`flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition ${
-              camEnabled ? "bg-blue-500 hover:bg-blue-600" : "bg-gray-700 hover:bg-gray-600"
-            }`}
-          >
-            {camEnabled ? (
-              <Video size={22} className="text-white" />
-            ) : (
-              <VideoOff size={22} className="text-white" />
-            )}
-          </button>
-
-          <button
-            onClick={leaveCall}
-            className="flex items-center justify-center w-14 h-14 rounded-full shadow-lg bg-red-500 hover:bg-red-600 transition"
-          >
-            <PhoneOff size={24} className="text-white" />
-          </button>
-        </div>
-      )}
-
-      {/* NEW: subtle centered overlay when call has ended */}
       {callEnded && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/60">
           <div className="text-white text-xl font-semibold">Call ended</div>
@@ -456,9 +435,8 @@ function ProfilePlaceholder({
       <img
         src={url}
         alt="Profile"
-        className={`relative rounded-full border-4 border-white shadow-xl object-cover ${
-          large ? "w-40 h-40" : small ? "w-20 h-20 border-2" : "w-32 h-32"
-        }`}
+        className={`relative rounded-full border-4 border-white shadow-xl object-cover ${large ? "w-40 h-40" : small ? "w-20 h-20 border-2" : "w-32 h-32"
+          }`}
       />
     </div>
   );
